@@ -135,8 +135,9 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
       {/* Avatar banner */}
       {getAvatar(agent) && (
         <div
-          className="w-full h-32 overflow-hidden flex items-center justify-center"
+          className="w-full h-32 overflow-hidden flex items-center justify-center cursor-pointer hover:opacity-90 transition-opacity"
           style={{ backgroundColor: `hsl(${agent.accentColor} / 0.1)` }}
+          onClick={() => navigate(`/agent/${agent.id}`)}
         >
           <img
             src={getAvatar(agent)}
@@ -149,8 +150,8 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
       <div className="p-4 border-b border-border">
         <div className="flex items-center gap-2">
           {!getAvatar(agent) && <span className="text-2xl">{agent.emoji}</span>}
-          <div>
-            <h3 className="font-semibold text-foreground text-lg font-mono">{agent.name}</h3>
+          <div className="cursor-pointer" onClick={() => navigate(`/agent/${agent.id}`)}>
+            <h3 className="font-semibold text-foreground text-lg font-mono hover:text-primary transition-colors">{agent.name}</h3>
             <p className="text-xs text-muted-foreground">{agent.role}</p>
           </div>
           <div className="ml-auto flex items-center gap-2">
