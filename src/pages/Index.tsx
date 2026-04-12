@@ -21,16 +21,24 @@ export default function Index() {
     else panelRefs.current.delete(id);
   }, []);
 
-  // Send message to all agents sequentially in speakOrder
+  // Send message to all agents in parallel, then speak in order
   const broadcastMessage = useCallback(async (text: string) => {
     if (!text.trim() || !meetingActive || isBroadcasting) return;
     setIsBroadcasting(true);
 
-    // Agents are already sorted by speakOrder from the store
-    for (const agent of store.agents) {
-      const handle = panelRefs.current.get(agent.id);
-      if (handle) {
-        await handle.sendMessage(text);
+    // Fire all API calls in parallel
+    const results = await Promise.all(
+      store.agents.map(async (agent) => {
+        const handle = panelRefs.current.get(agent.id);
+        const reply = handle ? await handle.sendMessage(text) : "";
+        return { agent, reply, handle };
+      })
+    );
+
+    // Play TTS sequentially in speakOrder (agents already sorted)
+    for (const { reply, handle } of results) {
+      if (handle && reply) {
+        await handle.speak(reply);
       }
     }
 
