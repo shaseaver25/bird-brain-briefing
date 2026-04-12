@@ -155,6 +155,13 @@ export default function Index({ userId }: IndexProps) {
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => supabase.auth.signOut()}
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-md font-mono text-xs text-muted-foreground hover:text-foreground border border-border hover:border-primary transition-colors"
+              title="Sign out"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </button>
             <SettingsPanel
               agents={store.agents}
               apiKey={store.apiKey}
