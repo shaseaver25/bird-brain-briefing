@@ -17,6 +17,9 @@ export default function Index({ userId }: IndexProps) {
   const [askAllText, setAskAllText] = useState("");
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [silentMode, setSilentMode] = useState(false);
+  const [meetingParticipants, setMeetingParticipants] = useState<Set<string>>(
+    () => new Set(store.agents.map((a) => a.id))
+  );
   const panelRefs = useRef<Map<string, AgentPanelHandle>>(new Map());
   const { isListening, transcript, startListening, stopListening } = useSpeechRecognition();
   const prevTranscriptRef = useRef("");
