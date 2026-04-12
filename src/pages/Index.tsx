@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Play, Radio, Send, Mic, Volume2, VolumeX, RotateCcw } from "lucide-react";
+import { Play, Radio, Send, Mic, Volume2, VolumeX, RotateCcw, Square } from "lucide-react";
 import AgentPanel, { AgentPanelHandle } from "@/components/AgentPanel";
 import SettingsPanel from "@/components/SettingsPanel";
 import { useAgentStore } from "@/hooks/useAgentStore";
@@ -15,19 +15,33 @@ export default function Index() {
   const panelRefs = useRef<Map<string, AgentPanelHandle>>(new Map());
   const { isListening, transcript, startListening, stopListening } = useSpeechRecognition();
   const prevTranscriptRef = useRef("");
+  const abortRef = useRef(false);
 
   const setRef = useCallback((id: string, handle: AgentPanelHandle | null) => {
     if (handle) panelRefs.current.set(id, handle);
     else panelRefs.current.delete(id);
   }, []);
 
-  // Send message to all agents in parallel, then speak in order
+  // Detect if user is addressing a specific agent by name
+  const detectTargetAgents = useCallback((text: string) => {
+    const lower = text.toLowerCase();
+    const matched = store.agents.filter((a) => lower.includes(a.name.toLowerCase()));
+    // Only target specific agents if exactly some are mentioned (not all)
+    if (matched.length > 0 && matched.length < store.agents.length) {
+      return matched;
+    }
+    return store.agents; // broadcast to all
+  }, [store.agents]);
+
+  // Send message to targeted agents in parallel, then speak in order
   const broadcastMessage = useCallback(async (text: string) => {
     if (!text.trim() || !meetingActive || isBroadcasting) return;
     setIsBroadcasting(true);
+    abortRef.current = false;
 
-    // Create a promise for each agent's API response
-    const agentPromises = store.agents.map((agent) => {
+    const targetAgents = detectTargetAgents(text);
+
+    const agentPromises = targetAgents.map((agent) => {
       const handle = panelRefs.current.get(agent.id);
       return {
         agent,
@@ -36,17 +50,22 @@ export default function Index() {
       };
     });
 
-    // Speak in order: await each agent's response then speak immediately,
-    // while later agents may still be fetching in parallel
     for (const { handle, replyPromise } of agentPromises) {
+      if (abortRef.current) break;
       const reply = await replyPromise;
+      if (abortRef.current) break;
       if (handle && reply) {
         await handle.speak(reply);
       }
     }
 
     setIsBroadcasting(false);
-  }, [meetingActive, store.agents, isBroadcasting]);
+  }, [meetingActive, detectTargetAgents, isBroadcasting]);
+
+  const handleStop = useCallback(() => {
+    abortRef.current = true;
+    setIsBroadcasting(false);
+  }, []);
 
   // Handle speech recognition result
   const handleMicClick = () => {
