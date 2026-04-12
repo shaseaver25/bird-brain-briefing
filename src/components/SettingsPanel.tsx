@@ -78,6 +78,12 @@ function AgentForm({
       />
       <input
         className={inputClass}
+        placeholder="Agent ID (sent in POST body)"
+        value={agent.agentId}
+        onChange={(e) => onChange("agentId", e.target.value)}
+      />
+      <input
+        className={inputClass}
         placeholder="ElevenLabs Voice ID"
         value={agent.voiceId}
         onChange={(e) => onChange("voiceId", e.target.value)}
