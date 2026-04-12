@@ -204,7 +204,7 @@ export default function SettingsPanel({
               <div className="mb-3">
                 <AgentForm
                   agent={newAgent}
-                  onChange={(f, v) => setNewAgent((a) => ({ ...a, [f]: v }))}
+                  onChange={(f, v) => setNewAgent((a) => ({ ...a, [f]: f === "speakOrder" ? Number(v) : v }))}
                 >
                   <div className="flex gap-2 pt-1">
                     <button
@@ -253,7 +253,7 @@ export default function SettingsPanel({
                     <div className="border-t border-border">
                       <AgentForm
                         agent={agent}
-                        onChange={(f, v) => onUpdateAgent(agent.id, { [f]: v })}
+                        onChange={(f, v) => onUpdateAgent(agent.id, { [f]: f === "speakOrder" ? Number(v) : v })}
                       >
                         <div className="px-0 pt-1">
                           <button
