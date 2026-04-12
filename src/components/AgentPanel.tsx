@@ -17,7 +17,7 @@ const AVATAR_MAP: Record<string, string> = {
 };
 
 function getAvatar(agent: { id: string; name: string }): string | undefined {
-  return getAvatar(agent) || AVATAR_MAP[agent.name.toLowerCase()];
+  return AVATAR_MAP[agent.id] || AVATAR_MAP[agent.name.toLowerCase()];
 }
 
 interface ChatMessage {
