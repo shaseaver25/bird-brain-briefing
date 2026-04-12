@@ -36,7 +36,7 @@ const DEFAULT_AGENTS: AgentConfig[] = [
     name: "SalesHawk",
     emoji: "🦅",
     role: "Sales Lead",
-    voiceId: "pNInz6obpgDQGcFmaJgB",
+    voiceId: "TX3LPaxmHKxFdv7VOQHJ",
     agentId: "saleshawk",
     apiUrl: import.meta.env.VITE_SALESHAWK_API_URL || "",
     accentColor: "35 90% 55%",
