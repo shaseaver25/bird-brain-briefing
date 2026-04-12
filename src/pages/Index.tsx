@@ -17,6 +17,9 @@ export default function Index({ userId }: IndexProps) {
   const [askAllText, setAskAllText] = useState("");
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [silentMode, setSilentMode] = useState(false);
+  const [meetingParticipants, setMeetingParticipants] = useState<Set<string>>(
+    () => new Set(store.agents.map((a) => a.id))
+  );
   const panelRefs = useRef<Map<string, AgentPanelHandle>>(new Map());
   const { isListening, transcript, startListening, stopListening } = useSpeechRecognition();
   const prevTranscriptRef = useRef("");
@@ -29,14 +32,14 @@ export default function Index({ userId }: IndexProps) {
 
   // Detect if user is addressing a specific agent by name
   const detectTargetAgents = useCallback((text: string) => {
+    const participating = store.agents.filter((a) => meetingParticipants.has(a.id));
     const lower = text.toLowerCase();
-    const matched = store.agents.filter((a) => lower.includes(a.name.toLowerCase()));
-    // Only target specific agents if exactly some are mentioned (not all)
-    if (matched.length > 0 && matched.length < store.agents.length) {
+    const matched = participating.filter((a) => lower.includes(a.name.toLowerCase()));
+    if (matched.length > 0 && matched.length < participating.length) {
       return matched;
     }
-    return store.agents; // broadcast to all
-  }, [store.agents]);
+    return participating;
+  }, [store.agents, meetingParticipants]);
 
   // Send message to targeted agents in parallel, then speak in order
   // Queue for TTS playback in speak-order
@@ -325,6 +328,15 @@ export default function Index({ userId }: IndexProps) {
                 isActive={meetingActive}
                 apiKey={store.apiKey}
                 silentMode={silentMode}
+                inMeeting={meetingParticipants.has(agent.id)}
+                onToggleMeeting={() => {
+                  setMeetingParticipants((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(agent.id)) next.delete(agent.id);
+                    else next.add(agent.id);
+                    return next;
+                  });
+                }}
               />
             </motion.div>
           ))}

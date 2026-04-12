@@ -30,6 +30,8 @@ interface AgentPanelProps {
   isActive: boolean;
   apiKey: string;
   silentMode: boolean;
+  inMeeting: boolean;
+  onToggleMeeting: () => void;
 }
 
 export interface AgentPanelHandle {
@@ -38,7 +40,7 @@ export interface AgentPanelHandle {
   stopSpeaking: () => void;
 }
 
-const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isActive, apiKey, silentMode }, ref) => {
+const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isActive, apiKey, silentMode, inMeeting, onToggleMeeting }, ref) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isThinking, setIsThinking] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -150,6 +152,17 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
             <p className="text-xs text-muted-foreground">{agent.role}</p>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={onToggleMeeting}
+              className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium transition-colors"
+              style={{
+                backgroundColor: inMeeting ? `hsl(${agent.accentColor} / 0.15)` : 'transparent',
+                color: inMeeting ? accent : 'hsl(var(--muted-foreground))',
+                border: `1px solid ${inMeeting ? accent : 'hsl(var(--border))'}`,
+              }}
+            >
+              {inMeeting ? "IN" : "OUT"}
+            </button>
             <span className="text-[10px] text-muted-foreground font-mono">#{agent.speakOrder}</span>
             {isSpeaking && (
               <Volume2 className="h-4 w-4 animate-pulse" style={{ color: accent }} />
