@@ -34,62 +34,19 @@ const EMPTY_AGENT: Omit<AgentConfig, "id"> = {
   accentColor: "210 80% 55%",
 };
 
-export default function SettingsPanel({
-  agents,
-  apiKey,
-  onAddAgent,
-  onUpdateAgent,
-  onRemoveAgent,
-  onSetApiKey,
-  onExport,
-  onImport,
-}: SettingsPanelProps) {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [showNewForm, setShowNewForm] = useState(false);
-  const [newAgent, setNewAgent] = useState(EMPTY_AGENT);
-  const [importText, setImportText] = useState("");
-  const [importError, setImportError] = useState(false);
+const inputClass =
+  "w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary";
 
-  const handleAddAgent = () => {
-    if (!newAgent.name.trim()) return;
-    onAddAgent(newAgent);
-    setNewAgent(EMPTY_AGENT);
-    setShowNewForm(false);
-  };
-
-  const handleExport = () => {
-    const json = onExport();
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "staff-meeting-roster.json";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImport = () => {
-    const ok = onImport(importText);
-    if (ok) {
-      setImportText("");
-      setImportError(false);
-    } else {
-      setImportError(true);
-    }
-  };
-
-  const inputClass =
-    "w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary";
-
-  const AgentForm = ({
-    agent,
-    onChange,
-    isNew,
-  }: {
-    agent: Omit<AgentConfig, "id"> & { id?: string };
-    onChange: (field: string, value: string) => void;
-    isNew?: boolean;
-  }) => (
+function AgentForm({
+  agent,
+  onChange,
+  children,
+}: {
+  agent: Omit<AgentConfig, "id"> & { id?: string };
+  onChange: (field: string, value: string) => void;
+  children?: React.ReactNode;
+}) {
+  return (
     <div className="space-y-3 p-3 rounded-md bg-muted">
       <div className="grid grid-cols-[1fr_auto] gap-2">
         <input
@@ -140,28 +97,54 @@ export default function SettingsPanel({
           ))}
         </div>
       </div>
-      {isNew && (
-        <div className="flex gap-2 pt-1">
-          <button
-            onClick={handleAddAgent}
-            disabled={!agent.name.trim()}
-            className="flex-1 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-40"
-          >
-            Add Agent
-          </button>
-          <button
-            onClick={() => {
-              setShowNewForm(false);
-              setNewAgent(EMPTY_AGENT);
-            }}
-            className="rounded-md bg-secondary px-3 py-2 text-sm text-secondary-foreground"
-          >
-            Cancel
-          </button>
-        </div>
-      )}
+      {children}
     </div>
   );
+}
+
+export default function SettingsPanel({
+  agents,
+  apiKey,
+  onAddAgent,
+  onUpdateAgent,
+  onRemoveAgent,
+  onSetApiKey,
+  onExport,
+  onImport,
+}: SettingsPanelProps) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newAgent, setNewAgent] = useState(EMPTY_AGENT);
+  const [importText, setImportText] = useState("");
+  const [importError, setImportError] = useState(false);
+
+  const handleAddAgent = () => {
+    if (!newAgent.name.trim()) return;
+    onAddAgent(newAgent);
+    setNewAgent(EMPTY_AGENT);
+    setShowNewForm(false);
+  };
+
+  const handleExport = () => {
+    const json = onExport();
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "staff-meeting-roster.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = () => {
+    const ok = onImport(importText);
+    if (ok) {
+      setImportText("");
+      setImportError(false);
+    } else {
+      setImportError(true);
+    }
+  };
 
   return (
     <Sheet>
@@ -209,8 +192,26 @@ export default function SettingsPanel({
                 <AgentForm
                   agent={newAgent}
                   onChange={(f, v) => setNewAgent((a) => ({ ...a, [f]: v }))}
-                  isNew
-                />
+                >
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={handleAddAgent}
+                      disabled={!newAgent.name.trim()}
+                      className="flex-1 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-40"
+                    >
+                      Add Agent
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowNewForm(false);
+                        setNewAgent(EMPTY_AGENT);
+                      }}
+                      className="rounded-md bg-secondary px-3 py-2 text-sm text-secondary-foreground"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </AgentForm>
               </div>
             )}
 
@@ -240,18 +241,19 @@ export default function SettingsPanel({
                       <AgentForm
                         agent={agent}
                         onChange={(f, v) => onUpdateAgent(agent.id, { [f]: v })}
-                      />
-                      <div className="px-3 pb-3">
-                        <button
-                          onClick={() => {
-                            onRemoveAgent(agent.id);
-                            setExpandedId(null);
-                          }}
-                          className="flex items-center gap-1 text-xs text-destructive hover:text-destructive/80"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" /> Remove agent
-                        </button>
-                      </div>
+                      >
+                        <div className="px-0 pt-1">
+                          <button
+                            onClick={() => {
+                              onRemoveAgent(agent.id);
+                              setExpandedId(null);
+                            }}
+                            className="flex items-center gap-1 text-xs text-destructive hover:text-destructive/80"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Remove agent
+                          </button>
+                        </div>
+                      </AgentForm>
                     </div>
                   )}
                 </div>
