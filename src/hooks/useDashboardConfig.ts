@@ -13,7 +13,7 @@ export function useDashboardConfig(agentId: string) {
       setLoading(true); setError(null);
       const { data, error: e } = await supabase.from('dashboard_configs').select('*').eq('agent_id', agentId).eq('is_published', true).single();
       if (cancelled) return;
-      if (e) { setError(new Error(e.message)); setConfig(null); } else { setConfig(data as DashboardConfig); }
+      if (e) { setError(new Error(e.message)); setConfig(null); } else { setConfig(data as unknown as DashboardConfig); }
       setLoading(false);
     }
     fetch();
