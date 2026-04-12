@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Play, Radio, Send, Mic, Volume2, VolumeX } from "lucide-react";
+import { Play, Radio, Send, Mic, Volume2, VolumeX, RotateCcw } from "lucide-react";
 import AgentPanel, { AgentPanelHandle } from "@/components/AgentPanel";
 import SettingsPanel from "@/components/SettingsPanel";
 import { useAgentStore } from "@/hooks/useAgentStore";
@@ -114,6 +114,24 @@ export default function Index() {
               onExport={store.exportConfig}
               onImport={store.importConfig}
             />
+
+            <button
+              onClick={async () => {
+                const baseUrl = store.agents[0]?.apiUrl;
+                if (!baseUrl) return;
+                try {
+                  const url = new URL(baseUrl);
+                  await fetch(`${url.origin}/reset`, { method: "POST" });
+                  window.location.reload();
+                } catch (err) {
+                  console.error("Reset failed:", err);
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-md font-mono text-sm font-medium border border-border text-muted-foreground hover:text-foreground hover:border-primary transition-colors"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              New Meeting
+            </button>
 
             <button
               onClick={() => setMeetingActive(!meetingActive)}
