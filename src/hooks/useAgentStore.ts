@@ -19,7 +19,6 @@ interface StoreState {
 }
 
 const STORAGE_KEY = "staff-meeting-config";
-const CONFIG_ID = "default";
 
 const DEFAULT_AGENTS: AgentConfig[] = [
   {
@@ -29,7 +28,7 @@ const DEFAULT_AGENTS: AgentConfig[] = [
     role: "Strategy Lead",
     voiceId: "TxGEqnHWrfWFTfGW9XjX",
     agentId: "main",
-    apiUrl: import.meta.env.VITE_WREN_API_URL || "",
+    apiUrl: "",
     accentColor: "45 90% 50%",
     speakOrder: 1,
   },
@@ -40,7 +39,7 @@ const DEFAULT_AGENTS: AgentConfig[] = [
     role: "Sales Lead",
     voiceId: "TX3LPaxmHKxFdv7VOQHJ",
     agentId: "saleshawk",
-    apiUrl: import.meta.env.VITE_SALESHAWK_API_URL || "",
+    apiUrl: "",
     accentColor: "35 90% 55%",
     speakOrder: 2,
   },
@@ -51,7 +50,7 @@ const DEFAULT_AGENTS: AgentConfig[] = [
     role: "Agent Architect",
     voiceId: "ErXwobaYiN019PkySvjV",
     agentId: "forge",
-    apiUrl: import.meta.env.VITE_OSPREY_API_URL || "",
+    apiUrl: "",
     accentColor: "173 80% 40%",
     speakOrder: 3,
   },
@@ -62,7 +61,7 @@ const DEFAULT_AGENTS: AgentConfig[] = [
     role: "Project Tracker",
     voiceId: "ErXwobaYiN019PkySvjV",
     agentId: "merlin",
-    apiUrl: import.meta.env.VITE_MERLIN_API_URL || "",
+    apiUrl: "",
     accentColor: "260 60% 60%",
     speakOrder: 4,
   },
@@ -77,28 +76,22 @@ function loadLocalState(): StoreState {
         ...a,
         speakOrder: a.speakOrder ?? i + 1,
       }));
-      return {
-        agents,
-        apiKey: parsed.apiKey || import.meta.env.VITE_ELEVENLABS_API_KEY || "",
-      };
+      return { agents, apiKey: parsed.apiKey || "" };
     }
   } catch {}
-  return {
-    agents: DEFAULT_AGENTS,
-    apiKey: import.meta.env.VITE_ELEVENLABS_API_KEY || "",
-  };
+  return { agents: DEFAULT_AGENTS, apiKey: "" };
 }
 
 function saveLocal(state: StoreState) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-async function loadFromCloud(): Promise<StoreState | null> {
+async function loadFromCloud(userId: string): Promise<StoreState | null> {
   try {
     const { data, error } = await supabase
       .from("app_config")
       .select("agents, api_key")
-      .eq("id", CONFIG_ID)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (error || !data) return null;
@@ -114,42 +107,44 @@ async function loadFromCloud(): Promise<StoreState | null> {
   }
 }
 
-async function saveToCloud(state: StoreState) {
+async function saveToCloud(userId: string, state: StoreState) {
   try {
-    await (supabase
-      .from("app_config") as any)
-      .upsert({
-        id: CONFIG_ID,
-        agents: state.agents,
-        api_key: state.apiKey,
-        updated_at: new Date().toISOString(),
-      });
+    await (supabase.from("app_config") as any).upsert({
+      user_id: userId,
+      agents: state.agents,
+      api_key: state.apiKey,
+      updated_at: new Date().toISOString(),
+    });
   } catch (err) {
     console.error("Cloud save failed:", err);
   }
 }
 
-export function useAgentStore() {
+export function useAgentStore(userId: string | null) {
   const [state, setState] = useState<StoreState>(loadLocalState);
   const [cloudLoaded, setCloudLoaded] = useState(false);
 
-  // On mount, try to load from cloud (overrides localStorage)
+  // Load from cloud when userId is available
   useEffect(() => {
-    loadFromCloud().then((cloudState) => {
+    if (!userId) {
+      setCloudLoaded(false);
+      return;
+    }
+    loadFromCloud(userId).then((cloudState) => {
       if (cloudState && cloudState.agents.length > 0) {
         setState(cloudState);
         saveLocal(cloudState);
       }
       setCloudLoaded(true);
     });
-  }, []);
+  }, [userId]);
 
-  // Save to both localStorage and cloud on changes (after initial cloud load)
+  // Save to both localStorage and cloud on changes
   useEffect(() => {
-    if (!cloudLoaded) return;
+    if (!cloudLoaded || !userId) return;
     saveLocal(state);
-    saveToCloud(state);
-  }, [state, cloudLoaded]);
+    saveToCloud(userId, state);
+  }, [state, cloudLoaded, userId]);
 
   const setAgents = useCallback((agents: AgentConfig[]) => {
     setState((s) => ({ ...s, agents }));
