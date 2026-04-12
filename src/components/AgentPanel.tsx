@@ -16,6 +16,10 @@ const AVATAR_MAP: Record<string, string> = {
   wren: wrenAvatar,
 };
 
+function getAvatar(agent: { id: string; name: string }): string | undefined {
+  return getAvatar(agent) || AVATAR_MAP[agent.name.toLowerCase()];
+}
+
 interface ChatMessage {
   role: "user" | "agent";
   text: string;
@@ -125,10 +129,10 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
       style={{ borderTopColor: accent, borderTopWidth: "2px" }}
     >
       {/* Avatar banner */}
-      {AVATAR_MAP[agent.id] && (
+      {getAvatar(agent) && (
         <div className="w-full h-32 overflow-hidden">
           <img
-            src={AVATAR_MAP[agent.id]}
+            src={getAvatar(agent)}
             alt={`${agent.name} avatar`}
             className="w-full h-full object-cover object-top"
           />
@@ -137,7 +141,7 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
 
       <div className="p-4 border-b border-border">
         <div className="flex items-center gap-2">
-          {!AVATAR_MAP[agent.id] && <span className="text-2xl">{agent.emoji}</span>}
+          {!getAvatar(agent) && <span className="text-2xl">{agent.emoji}</span>}
           <div>
             <h3 className="font-semibold text-foreground text-lg font-mono">{agent.name}</h3>
             <p className="text-xs text-muted-foreground">{agent.role}</p>
