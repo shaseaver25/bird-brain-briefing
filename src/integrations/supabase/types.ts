@@ -119,6 +119,39 @@ export type Database = {
         }
         Relationships: []
       }
+      agents: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          role: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          role: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          role?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       app_config: {
         Row: {
           agents: Json
@@ -139,6 +172,82 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      dashboard_configs: {
+        Row: {
+          agent_id: string
+          created_at: string
+          id: string
+          is_published: boolean
+          layout_config: Json
+          theme: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          layout_config?: Json
+          theme?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          layout_config?: Json
+          theme?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dashboard_configs_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: true
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      widget_data: {
+        Row: {
+          agent_id: string
+          data: Json
+          expires_at: string | null
+          id: string
+          updated_at: string
+          widget_key: string
+        }
+        Insert: {
+          agent_id: string
+          data: Json
+          expires_at?: string | null
+          id?: string
+          updated_at?: string
+          widget_key: string
+        }
+        Update: {
+          agent_id?: string
+          data?: Json
+          expires_at?: string | null
+          id?: string
+          updated_at?: string
+          widget_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "widget_data_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
