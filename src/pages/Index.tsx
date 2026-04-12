@@ -32,14 +32,14 @@ export default function Index({ userId }: IndexProps) {
 
   // Detect if user is addressing a specific agent by name
   const detectTargetAgents = useCallback((text: string) => {
+    const participating = store.agents.filter((a) => meetingParticipants.has(a.id));
     const lower = text.toLowerCase();
-    const matched = store.agents.filter((a) => lower.includes(a.name.toLowerCase()));
-    // Only target specific agents if exactly some are mentioned (not all)
-    if (matched.length > 0 && matched.length < store.agents.length) {
+    const matched = participating.filter((a) => lower.includes(a.name.toLowerCase()));
+    if (matched.length > 0 && matched.length < participating.length) {
       return matched;
     }
-    return store.agents; // broadcast to all
-  }, [store.agents]);
+    return participating;
+  }, [store.agents, meetingParticipants]);
 
   // Send message to targeted agents in parallel, then speak in order
   // Queue for TTS playback in speak-order
