@@ -103,7 +103,7 @@ async function loadFromCloud(): Promise<StoreState | null> {
 
     if (error || !data) return null;
 
-    const agents = (data.agents as AgentConfig[]).map((a, i) => ({
+    const agents = (data.agents as unknown as AgentConfig[]).map((a, i) => ({
       ...a,
       speakOrder: a.speakOrder ?? i + 1,
     }));
@@ -116,11 +116,11 @@ async function loadFromCloud(): Promise<StoreState | null> {
 
 async function saveToCloud(state: StoreState) {
   try {
-    await supabase
-      .from("app_config")
+    await (supabase
+      .from("app_config") as any)
       .upsert({
         id: CONFIG_ID,
-        agents: state.agents as unknown as Record<string, unknown>,
+        agents: state.agents,
         api_key: state.apiKey,
         updated_at: new Date().toISOString(),
       });
