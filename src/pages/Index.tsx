@@ -133,6 +133,7 @@ export default function Index() {
               New Meeting
             </button>
 
+            <button
               onClick={() => setMeetingActive(!meetingActive)}
               className="flex items-center gap-2 px-5 py-2.5 rounded-md font-mono text-sm font-medium transition-all duration-300"
               style={{
