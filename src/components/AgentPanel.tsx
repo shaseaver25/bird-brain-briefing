@@ -1,7 +1,6 @@
-import { useState, useCallback, useRef, useEffect, useImperativeHandle, forwardRef } from "react";
+import { useState, useCallback, useRef, useImperativeHandle, forwardRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mic, Volume2 } from "lucide-react";
-import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { Volume2 } from "lucide-react";
 import { textToSpeech } from "@/lib/elevenlabs";
 import { AgentConfig } from "@/hooks/useAgentStore";
 
@@ -17,6 +16,7 @@ interface AgentPanelProps {
 }
 
 export interface AgentPanelHandle {
+  /** Send a message, fetch response, play TTS. Returns a promise that resolves when audio finishes. */
   sendMessage: (text: string) => Promise<void>;
 }
 
@@ -24,20 +24,11 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isThinking, setIsThinking] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const { isListening, transcript, startListening, stopListening } = useSpeechRecognition();
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const prevTranscriptRef = useRef("");
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isThinking]);
-
-  useEffect(() => {
-    if (!isListening && transcript && transcript !== prevTranscriptRef.current) {
-      prevTranscriptRef.current = transcript;
-      sendMessage(transcript);
-    }
-  }, [isListening, transcript]);
 
   const sendMessage = useCallback(async (text: string) => {
     setMessages((prev) => [...prev, { role: "user", text }]);
@@ -56,11 +47,24 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
       setMessages((prev) => [...prev, { role: "agent", text: reply }]);
       setIsThinking(false);
 
+      // Play TTS and wait for it to finish
       setIsSpeaking(true);
       const audio = await textToSpeech(reply, agent.voiceId, apiKey);
       if (audio) {
-        audio.onended = () => setIsSpeaking(false);
-        await audio.play();
+        await new Promise<void>((resolve) => {
+          audio.onended = () => {
+            setIsSpeaking(false);
+            resolve();
+          };
+          audio.onerror = () => {
+            setIsSpeaking(false);
+            resolve();
+          };
+          audio.play().catch(() => {
+            setIsSpeaking(false);
+            resolve();
+          });
+        });
       } else {
         setIsSpeaking(false);
       }
@@ -72,12 +76,6 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
   }, [agent, apiKey]);
 
   useImperativeHandle(ref, () => ({ sendMessage }), [sendMessage]);
-
-  const handleMicClick = () => {
-    if (!isActive) return;
-    if (isListening) stopListening();
-    else startListening();
-  };
 
   const accent = `hsl(${agent.accentColor})`;
 
@@ -93,9 +91,12 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
             <h3 className="font-semibold text-foreground text-lg font-mono">{agent.name}</h3>
             <p className="text-xs text-muted-foreground">{agent.role}</p>
           </div>
-          {isSpeaking && (
-            <Volume2 className="ml-auto h-4 w-4 animate-pulse" style={{ color: accent }} />
-          )}
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-[10px] text-muted-foreground font-mono">#{agent.speakOrder}</span>
+            {isSpeaking && (
+              <Volume2 className="h-4 w-4 animate-pulse" style={{ color: accent }} />
+            )}
+          </div>
         </div>
       </div>
 
@@ -138,35 +139,6 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
         )}
         <div ref={chatEndRef} />
       </div>
-
-      <div className="p-4 border-t border-border flex justify-center">
-        <div className="relative">
-          {isListening && (
-            <>
-              <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ backgroundColor: accent }} />
-              <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ backgroundColor: accent, animationDelay: "0.5s" }} />
-            </>
-          )}
-          <button
-            onClick={handleMicClick}
-            disabled={!isActive || isThinking}
-            className="relative z-10 w-14 h-14 rounded-full flex items-center justify-center border-2 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
-            style={{
-              borderColor: accent,
-              backgroundColor: isListening ? accent : "transparent",
-              color: isListening ? "hsl(var(--background))" : accent,
-            }}
-          >
-            <Mic className="h-6 w-6" />
-          </button>
-        </div>
-      </div>
-
-      {isListening && transcript && (
-        <div className="px-4 pb-3">
-          <p className="text-xs text-muted-foreground italic truncate">"{transcript}"</p>
-        </div>
-      )}
     </div>
   );
 });

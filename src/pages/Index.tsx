@@ -1,29 +1,62 @@
 import { useState, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Play, Radio, Send } from "lucide-react";
+import { Play, Radio, Send, Mic } from "lucide-react";
 import AgentPanel, { AgentPanelHandle } from "@/components/AgentPanel";
 import SettingsPanel from "@/components/SettingsPanel";
 import { useAgentStore } from "@/hooks/useAgentStore";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 
 export default function Index() {
   const store = useAgentStore();
   const [meetingActive, setMeetingActive] = useState(false);
   const [askAllText, setAskAllText] = useState("");
+  const [isBroadcasting, setIsBroadcasting] = useState(false);
   const panelRefs = useRef<Map<string, AgentPanelHandle>>(new Map());
+  const { isListening, transcript, startListening, stopListening } = useSpeechRecognition();
+  const prevTranscriptRef = useRef("");
 
   const setRef = useCallback((id: string, handle: AgentPanelHandle | null) => {
     if (handle) panelRefs.current.set(id, handle);
     else panelRefs.current.delete(id);
   }, []);
 
+  // Send message to all agents sequentially in speakOrder
+  const broadcastMessage = useCallback(async (text: string) => {
+    if (!text.trim() || !meetingActive || isBroadcasting) return;
+    setIsBroadcasting(true);
+
+    // Agents are already sorted by speakOrder from the store
+    for (const agent of store.agents) {
+      const handle = panelRefs.current.get(agent.id);
+      if (handle) {
+        await handle.sendMessage(text);
+      }
+    }
+
+    setIsBroadcasting(false);
+  }, [meetingActive, store.agents, isBroadcasting]);
+
+  // Handle speech recognition result
+  const handleMicClick = () => {
+    if (!meetingActive || isBroadcasting) return;
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
+
+  // When speech recognition ends with a transcript, broadcast it
+  if (!isListening && transcript && transcript !== prevTranscriptRef.current) {
+    prevTranscriptRef.current = transcript;
+    broadcastMessage(transcript);
+  }
+
   const handleAskAll = () => {
     const text = askAllText.trim();
-    if (!text || !meetingActive) return;
+    if (!text) return;
     setAskAllText("");
-    store.agents.forEach((agent) => {
-      const handle = panelRefs.current.get(agent.id);
-      handle?.sendMessage(text);
-    });
+    broadcastMessage(text);
   };
 
   // Determine grid columns based on agent count
@@ -94,41 +127,73 @@ export default function Index() {
         </div>
       </header>
 
-      {/* Status bar + Ask All */}
-      <div className="border-b border-border px-6 py-2">
+      {/* Status bar + Broadcast controls */}
+      <div className="border-b border-border px-6 py-3">
         <div className="max-w-[1800px] mx-auto flex items-center gap-4">
           <div className="flex items-center gap-2">
             <span
               className={`w-2 h-2 rounded-full ${meetingActive ? "bg-primary animate-pulse" : "bg-muted-foreground"}`}
             />
             <span className="text-xs text-muted-foreground font-mono">
-              {meetingActive ? "MEETING IN SESSION" : "STANDBY"}
+              {isBroadcasting ? "AGENTS RESPONDING..." : meetingActive ? "MEETING IN SESSION" : "STANDBY"}
             </span>
           </div>
 
           {meetingActive && (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleAskAll();
-              }}
-              className="flex-1 flex items-center gap-2 max-w-xl ml-auto"
-            >
-              <input
-                className="flex-1 rounded-md border border-border bg-secondary px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                placeholder="Ask all agents..."
-                value={askAllText}
-                onChange={(e) => setAskAllText(e.target.value)}
-              />
-              <button
-                type="submit"
-                disabled={!askAllText.trim()}
-                className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-40"
+            <div className="flex-1 flex items-center gap-3 max-w-2xl ml-auto">
+              {/* Broadcast mic button */}
+              <div className="relative">
+                {isListening && (
+                  <>
+                    <span className="absolute inset-0 rounded-full animate-pulse-ring bg-primary" />
+                    <span className="absolute inset-0 rounded-full animate-pulse-ring bg-primary" style={{ animationDelay: "0.5s" }} />
+                  </>
+                )}
+                <button
+                  onClick={handleMicClick}
+                  disabled={isBroadcasting}
+                  className="relative z-10 w-10 h-10 rounded-full flex items-center justify-center border-2 border-primary transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                  style={{
+                    backgroundColor: isListening ? "hsl(var(--primary))" : "transparent",
+                    color: isListening ? "hsl(var(--primary-foreground))" : "hsl(var(--primary))",
+                  }}
+                  title="Broadcast to all agents"
+                >
+                  <Mic className="h-5 w-5" />
+                </button>
+              </div>
+
+              {isListening && transcript && (
+                <span className="text-xs text-muted-foreground italic truncate max-w-[200px]">
+                  "{transcript}"
+                </span>
+              )}
+
+              {/* Text input */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAskAll();
+                }}
+                className="flex-1 flex items-center gap-2"
               >
-                <Send className="h-3.5 w-3.5" />
-                Ask All
-              </button>
-            </form>
+                <input
+                  className="flex-1 rounded-md border border-border bg-secondary px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder="Ask all agents..."
+                  value={askAllText}
+                  onChange={(e) => setAskAllText(e.target.value)}
+                  disabled={isBroadcasting}
+                />
+                <button
+                  type="submit"
+                  disabled={!askAllText.trim() || isBroadcasting}
+                  className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-40"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  Ask All
+                </button>
+              </form>
+            </div>
           )}
         </div>
       </div>
