@@ -14,17 +14,18 @@ function keyToLabel(key: string): string {
 }
 
 function WidgetContent({ type, data, widgetKey }: Pick<WidgetFactoryProps, 'type' | 'data' | 'widgetKey'>) {
+  const d = data as any;
   switch (type) {
-    case 'kpi_card':        return <KpiCard data={data} label={keyToLabel(widgetKey)} />;
-    case 'line_chart':      return <LineChart data={data} />;
-    case 'alert_panel':     return <AlertPanel data={data} />;
-    case 'activity_feed':   return <ActivityFeed data={data} />;
-    case 'status_indicator': return <StatusIndicator data={data} />;
-    case 'text_block':      return <TextBlock data={data} />;
-    case 'quick_actions':   return <QuickActions data={data} />;
+    case 'kpi_card':        return <KpiCard data={d} label={keyToLabel(widgetKey)} />;
+    case 'line_chart':      return <LineChart data={d} />;
+    case 'alert_panel':     return <AlertPanel data={d} />;
+    case 'activity_feed':   return <ActivityFeed data={d} />;
+    case 'status_indicator': return <StatusIndicator data={d} />;
+    case 'text_block':      return <TextBlock data={d} />;
+    case 'quick_actions':   return <QuickActions data={d} />;
     default:
       return (
-        <div className="p-4 text-sm text-gray-500 dark:text-gray-400">
+        <div className="p-4 text-sm text-muted-foreground">
           Unknown widget type: <code>{type}</code>
         </div>
       );
@@ -32,7 +33,7 @@ function WidgetContent({ type, data, widgetKey }: Pick<WidgetFactoryProps, 'type
 }
 
 export function WidgetFactory({ type, data, isLoading, isStale, widgetKey }: WidgetFactoryProps) {
-  if (isLoading) return <div className="animate-pulse h-full bg-gray-100 dark:bg-gray-800 rounded-xl" />;
+  if (isLoading) return <div className="animate-pulse h-full bg-muted rounded-xl" />;
 
   const widget = <WidgetContent type={type} data={data} widgetKey={widgetKey} />;
 
