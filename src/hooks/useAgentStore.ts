@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface AgentConfig {
   id: string;
@@ -6,10 +7,10 @@ export interface AgentConfig {
   emoji: string;
   role: string;
   voiceId: string;
-  agentId: string; // ID sent in POST body to identify which agent responds
+  agentId: string;
   apiUrl: string;
-  accentColor: string; // raw HSL like "173 80% 40%"
-  speakOrder: number; // determines response order in meetings
+  accentColor: string;
+  speakOrder: number;
 }
 
 interface StoreState {
@@ -18,6 +19,7 @@ interface StoreState {
 }
 
 const STORAGE_KEY = "staff-meeting-config";
+const CONFIG_ID = "default";
 
 const DEFAULT_AGENTS: AgentConfig[] = [
   {
@@ -66,7 +68,7 @@ const DEFAULT_AGENTS: AgentConfig[] = [
   },
 ];
 
-function loadState(): StoreState {
+function loadLocalState(): StoreState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
@@ -87,16 +89,67 @@ function loadState(): StoreState {
   };
 }
 
-function saveState(state: StoreState) {
+function saveLocal(state: StoreState) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-export function useAgentStore() {
-  const [state, setState] = useState<StoreState>(loadState);
+async function loadFromCloud(): Promise<StoreState | null> {
+  try {
+    const { data, error } = await supabase
+      .from("app_config")
+      .select("agents, api_key")
+      .eq("id", CONFIG_ID)
+      .maybeSingle();
 
+    if (error || !data) return null;
+
+    const agents = (data.agents as unknown as AgentConfig[]).map((a, i) => ({
+      ...a,
+      speakOrder: a.speakOrder ?? i + 1,
+    }));
+
+    return { agents, apiKey: (data.api_key as string) || "" };
+  } catch {
+    return null;
+  }
+}
+
+async function saveToCloud(state: StoreState) {
+  try {
+    await (supabase
+      .from("app_config") as any)
+      .upsert({
+        id: CONFIG_ID,
+        agents: state.agents,
+        api_key: state.apiKey,
+        updated_at: new Date().toISOString(),
+      });
+  } catch (err) {
+    console.error("Cloud save failed:", err);
+  }
+}
+
+export function useAgentStore() {
+  const [state, setState] = useState<StoreState>(loadLocalState);
+  const [cloudLoaded, setCloudLoaded] = useState(false);
+
+  // On mount, try to load from cloud (overrides localStorage)
   useEffect(() => {
-    saveState(state);
-  }, [state]);
+    loadFromCloud().then((cloudState) => {
+      if (cloudState && cloudState.agents.length > 0) {
+        setState(cloudState);
+        saveLocal(cloudState);
+      }
+      setCloudLoaded(true);
+    });
+  }, []);
+
+  // Save to both localStorage and cloud on changes (after initial cloud load)
+  useEffect(() => {
+    if (!cloudLoaded) return;
+    saveLocal(state);
+    saveToCloud(state);
+  }, [state, cloudLoaded]);
 
   const setAgents = useCallback((agents: AgentConfig[]) => {
     setState((s) => ({ ...s, agents }));
@@ -145,7 +198,6 @@ export function useAgentStore() {
     return false;
   }, [state.apiKey]);
 
-  // Return agents sorted by speakOrder for display
   const sortedAgents = [...state.agents].sort((a, b) => a.speakOrder - b.speakOrder);
 
   return {
