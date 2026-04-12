@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -7,6 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import Index from "./pages/Index.tsx";
+import AgentDashboard from "./pages/AgentDashboard.tsx";
 import AuthPage from "./pages/AuthPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -38,7 +40,13 @@ function AuthGate() {
 
   if (!user) return <AuthPage />;
 
-  return <Index userId={user.id} />;
+  return <AuthGateInner userId={user.id} />;
+}
+
+function AuthGateInner({ userId }: { userId: string }) {
+  const { agentId } = useParams();
+  if (agentId) return <AgentDashboard userId={userId} />;
+  return <Index userId={userId} />;
 }
 
 const App = () => (
@@ -49,6 +57,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<AuthGate />} />
+          <Route path="/agent/:agentId" element={<AuthGate />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
