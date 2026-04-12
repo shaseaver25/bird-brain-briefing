@@ -30,6 +30,8 @@ interface AgentPanelProps {
   isActive: boolean;
   apiKey: string;
   silentMode: boolean;
+  inMeeting: boolean;
+  onToggleMeeting: () => void;
 }
 
 export interface AgentPanelHandle {
