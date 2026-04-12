@@ -6,6 +6,7 @@ export interface AgentConfig {
   emoji: string;
   role: string;
   voiceId: string;
+  agentId: string; // ID sent in POST body to identify which agent responds
   apiUrl: string;
   accentColor: string; // raw HSL like "173 80% 40%"
   speakOrder: number; // determines response order in meetings
@@ -25,6 +26,7 @@ const DEFAULT_AGENTS: AgentConfig[] = [
     emoji: "🐦",
     role: "Strategy Lead",
     voiceId: "TxGEqnHWrfWFTfGW9XjX",
+    agentId: "main",
     apiUrl: import.meta.env.VITE_WREN_API_URL || "",
     accentColor: "45 90% 50%",
     speakOrder: 1,
@@ -35,6 +37,7 @@ const DEFAULT_AGENTS: AgentConfig[] = [
     emoji: "🦅",
     role: "Sales Lead",
     voiceId: "pNInz6obpgDQGcFmaJgB",
+    agentId: "saleshawk",
     apiUrl: import.meta.env.VITE_SALESHAWK_API_URL || "",
     accentColor: "35 90% 55%",
     speakOrder: 2,
@@ -45,6 +48,7 @@ const DEFAULT_AGENTS: AgentConfig[] = [
     emoji: "🦅",
     role: "Agent Architect",
     voiceId: "ErXwobaYiN019PkySvjV",
+    agentId: "forge",
     apiUrl: import.meta.env.VITE_OSPREY_API_URL || "",
     accentColor: "173 80% 40%",
     speakOrder: 3,
@@ -55,6 +59,7 @@ const DEFAULT_AGENTS: AgentConfig[] = [
     emoji: "🦅",
     role: "Project Tracker",
     voiceId: "ErXwobaYiN019PkySvjV",
+    agentId: "merlin",
     apiUrl: import.meta.env.VITE_MERLIN_API_URL || "",
     accentColor: "260 60% 60%",
     speakOrder: 4,

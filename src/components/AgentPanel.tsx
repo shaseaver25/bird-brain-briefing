@@ -39,7 +39,7 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
       const res = await fetch(agent.apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ agent: agent.agentId, message: text }),
       });
 
       const data = await res.json();

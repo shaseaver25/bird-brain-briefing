@@ -30,6 +30,7 @@ const EMPTY_AGENT: Omit<AgentConfig, "id"> = {
   emoji: "🦅",
   role: "",
   voiceId: "",
+  agentId: "",
   apiUrl: "",
   accentColor: "210 80% 55%",
   speakOrder: 99,
@@ -74,6 +75,12 @@ function AgentForm({
         placeholder="API endpoint URL"
         value={agent.apiUrl}
         onChange={(e) => onChange("apiUrl", e.target.value)}
+      />
+      <input
+        className={inputClass}
+        placeholder="Agent ID (sent in POST body)"
+        value={agent.agentId}
+        onChange={(e) => onChange("agentId", e.target.value)}
       />
       <input
         className={inputClass}
