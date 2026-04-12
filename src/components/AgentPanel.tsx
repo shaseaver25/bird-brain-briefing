@@ -13,6 +13,7 @@ interface AgentPanelProps {
   agent: AgentConfig;
   isActive: boolean;
   apiKey: string;
+  silentMode: boolean;
 }
 
 export interface AgentPanelHandle {
@@ -20,7 +21,7 @@ export interface AgentPanelHandle {
   sendMessage: (text: string) => Promise<void>;
 }
 
-const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isActive, apiKey }, ref) => {
+const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isActive, apiKey, silentMode }, ref) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isThinking, setIsThinking] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -47,26 +48,28 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
       setMessages((prev) => [...prev, { role: "agent", text: reply }]);
       setIsThinking(false);
 
-      // Play TTS and wait for it to finish
-      setIsSpeaking(true);
-      const audio = await textToSpeech(reply, agent.voiceId, apiKey);
-      if (audio) {
-        await new Promise<void>((resolve) => {
-          audio.onended = () => {
-            setIsSpeaking(false);
-            resolve();
-          };
-          audio.onerror = () => {
-            setIsSpeaking(false);
-            resolve();
-          };
-          audio.play().catch(() => {
-            setIsSpeaking(false);
-            resolve();
+      // Play TTS only if not in silent mode
+      if (!silentMode) {
+        setIsSpeaking(true);
+        const audio = await textToSpeech(reply, agent.voiceId, apiKey);
+        if (audio) {
+          await new Promise<void>((resolve) => {
+            audio.onended = () => {
+              setIsSpeaking(false);
+              resolve();
+            };
+            audio.onerror = () => {
+              setIsSpeaking(false);
+              resolve();
+            };
+            audio.play().catch(() => {
+              setIsSpeaking(false);
+              resolve();
+            });
           });
-        });
-      } else {
-        setIsSpeaking(false);
+        } else {
+          setIsSpeaking(false);
+        }
       }
     } catch (err) {
       console.error("Agent error:", err);
