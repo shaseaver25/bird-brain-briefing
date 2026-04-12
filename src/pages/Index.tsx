@@ -116,6 +116,23 @@ export default function Index() {
             />
 
             <button
+              onClick={async () => {
+                const baseUrl = store.agents[0]?.apiUrl;
+                if (!baseUrl) return;
+                try {
+                  const url = new URL(baseUrl);
+                  await fetch(`${url.origin}/reset`, { method: "POST" });
+                  window.location.reload();
+                } catch (err) {
+                  console.error("Reset failed:", err);
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-md font-mono text-sm font-medium border border-border text-muted-foreground hover:text-foreground hover:border-primary transition-colors"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              New Meeting
+            </button>
+
               onClick={() => setMeetingActive(!meetingActive)}
               className="flex items-center gap-2 px-5 py-2.5 rounded-md font-mono text-sm font-medium transition-all duration-300"
               style={{
