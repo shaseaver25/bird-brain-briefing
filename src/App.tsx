@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -7,14 +6,14 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
-import Index from "./pages/Index.tsx";
-import AgentDashboard from "./pages/AgentDashboard.tsx";
-import AuthPage from "./pages/AuthPage.tsx";
-import NotFound from "./pages/NotFound.tsx";
+import StaffMeetingPage from "./pages/StaffMeetingPage";
+import KiroDashboardPage from "./pages/KiroDashboardPage";
+import AuthPage from "./pages/AuthPage";
+import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-function AuthGate() {
+function AuthGate({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -40,13 +39,7 @@ function AuthGate() {
 
   if (!user) return <AuthPage />;
 
-  return <AuthGateInner userId={user.id} />;
-}
-
-function AuthGateInner({ userId }: { userId: string }) {
-  const { agentId } = useParams();
-  if (agentId) return <AgentDashboard userId={userId} />;
-  return <Index userId={userId} />;
+  return <>{children}</>;
 }
 
 const App = () => (
@@ -56,8 +49,8 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<AuthGate />} />
-          <Route path="/agent/:agentId" element={<AuthGate />} />
+          <Route path="/" element={<AuthGate><StaffMeetingPage /></AuthGate>} />
+          <Route path="/dashboard/:agentId" element={<AuthGate><KiroDashboardPage /></AuthGate>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
