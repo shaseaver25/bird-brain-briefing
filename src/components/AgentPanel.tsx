@@ -33,7 +33,7 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isThinking]);
 
-  const sendMessage = useCallback(async (text: string) => {
+  const sendMessage = useCallback(async (text: string): Promise<string> => {
     setMessages((prev) => [...prev, { role: "user", text }]);
     setIsThinking(true);
 
@@ -49,38 +49,36 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
 
       setMessages((prev) => [...prev, { role: "agent", text: reply }]);
       setIsThinking(false);
-
-      // Play TTS only if not in silent mode
-      if (!silentMode) {
-        setIsSpeaking(true);
-        const audio = await textToSpeech(reply, agent.voiceId, apiKey);
-        if (audio) {
-          await new Promise<void>((resolve) => {
-            audio.onended = () => {
-              setIsSpeaking(false);
-              resolve();
-            };
-            audio.onerror = () => {
-              setIsSpeaking(false);
-              resolve();
-            };
-            audio.play().catch(() => {
-              setIsSpeaking(false);
-              resolve();
-            });
-          });
-        } else {
-          setIsSpeaking(false);
-        }
-      }
+      return reply;
     } catch (err) {
       console.error("Agent error:", err);
-      setMessages((prev) => [...prev, { role: "agent", text: "Connection error. Please try again." }]);
+      const errorMsg = "Connection error. Please try again.";
+      setMessages((prev) => [...prev, { role: "agent", text: errorMsg }]);
       setIsThinking(false);
+      return errorMsg;
     }
-  }, [agent, apiKey]);
+  }, [agent]);
 
-  useImperativeHandle(ref, () => ({ sendMessage }), [sendMessage]);
+  const speak = useCallback(async (text: string): Promise<void> => {
+    if (silentMode) return;
+    setIsSpeaking(true);
+    try {
+      const audio = await textToSpeech(text, agent.voiceId, apiKey);
+      if (audio) {
+        await new Promise<void>((resolve) => {
+          audio.onended = () => { setIsSpeaking(false); resolve(); };
+          audio.onerror = () => { setIsSpeaking(false); resolve(); };
+          audio.play().catch(() => { setIsSpeaking(false); resolve(); });
+        });
+      } else {
+        setIsSpeaking(false);
+      }
+    } catch {
+      setIsSpeaking(false);
+    }
+  }, [agent, apiKey, silentMode]);
+
+  useImperativeHandle(ref, () => ({ sendMessage, speak }), [sendMessage, speak]);
 
   const accent = `hsl(${agent.accentColor})`;
 
