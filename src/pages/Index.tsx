@@ -1,13 +1,18 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Play, Radio, Send, Mic, Volume2, VolumeX, RotateCcw, Square } from "lucide-react";
+import { Play, Radio, Send, Mic, Volume2, VolumeX, RotateCcw, Square, LogOut } from "lucide-react";
 import AgentPanel, { AgentPanelHandle } from "@/components/AgentPanel";
 import SettingsPanel from "@/components/SettingsPanel";
 import { useAgentStore } from "@/hooks/useAgentStore";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { supabase } from "@/integrations/supabase/client";
 
-export default function Index() {
-  const store = useAgentStore();
+interface IndexProps {
+  userId: string;
+}
+
+export default function Index({ userId }: IndexProps) {
+  const store = useAgentStore(userId);
   const [meetingActive, setMeetingActive] = useState(false);
   const [askAllText, setAskAllText] = useState("");
   const [isBroadcasting, setIsBroadcasting] = useState(false);
