@@ -17,10 +17,9 @@ interface AgentPanelProps {
 }
 
 export interface AgentPanelHandle {
-  /** Send a message and fetch response (no TTS). Returns the reply text. */
   sendMessage: (text: string) => Promise<string>;
-  /** Play TTS for a given text. Returns when audio finishes. */
   speak: (text: string) => Promise<void>;
+  stopSpeaking: () => void;
 }
 
 const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isActive, apiKey, silentMode }, ref) => {

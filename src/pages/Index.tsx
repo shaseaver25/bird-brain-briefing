@@ -64,6 +64,8 @@ export default function Index() {
 
   const handleStop = useCallback(() => {
     abortRef.current = true;
+    // Stop all currently speaking agents
+    panelRefs.current.forEach((handle) => handle.stopSpeaking());
     setIsBroadcasting(false);
   }, []);
 
@@ -78,10 +80,12 @@ export default function Index() {
   };
 
   // When speech recognition ends with a transcript, broadcast it
-  if (!isListening && transcript && transcript !== prevTranscriptRef.current) {
-    prevTranscriptRef.current = transcript;
-    broadcastMessage(transcript);
-  }
+  useEffect(() => {
+    if (!isListening && transcript && transcript !== prevTranscriptRef.current) {
+      prevTranscriptRef.current = transcript;
+      broadcastMessage(transcript);
+    }
+  }, [isListening, transcript, broadcastMessage]);
 
   const handleAskAll = () => {
     const text = askAllText.trim();
