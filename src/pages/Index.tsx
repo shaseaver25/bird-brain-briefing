@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Play, Radio, Send, Mic, Volume2, VolumeX, RotateCcw, Square } from "lucide-react";
 import AgentPanel, { AgentPanelHandle } from "@/components/AgentPanel";
