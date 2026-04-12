@@ -1,29 +1,26 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useImperativeHandle, forwardRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mic, Volume2 } from "lucide-react";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { textToSpeech } from "@/lib/elevenlabs";
+import { AgentConfig } from "@/hooks/useAgentStore";
 
 interface ChatMessage {
   role: "user" | "agent";
   text: string;
 }
 
-interface AgentConfig {
-  name: string;
-  emoji: string;
-  role: string;
-  voiceId: string;
-  apiUrl: string;
-  colorVar: string;
-}
-
 interface AgentPanelProps {
   agent: AgentConfig;
   isActive: boolean;
+  apiKey: string;
 }
 
-export default function AgentPanel({ agent, isActive }: AgentPanelProps) {
+export interface AgentPanelHandle {
+  sendMessage: (text: string) => Promise<void>;
+}
+
+const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isActive, apiKey }, ref) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isThinking, setIsThinking] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -35,7 +32,6 @@ export default function AgentPanel({ agent, isActive }: AgentPanelProps) {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isThinking]);
 
-  // When listening stops and we have a transcript, send it
   useEffect(() => {
     if (!isListening && transcript && transcript !== prevTranscriptRef.current) {
       prevTranscriptRef.current = transcript;
@@ -60,9 +56,8 @@ export default function AgentPanel({ agent, isActive }: AgentPanelProps) {
       setMessages((prev) => [...prev, { role: "agent", text: reply }]);
       setIsThinking(false);
 
-      // TTS
       setIsSpeaking(true);
-      const audio = await textToSpeech(reply, agent.voiceId);
+      const audio = await textToSpeech(reply, agent.voiceId, apiKey);
       if (audio) {
         audio.onended = () => setIsSpeaking(false);
         await audio.play();
@@ -74,25 +69,23 @@ export default function AgentPanel({ agent, isActive }: AgentPanelProps) {
       setMessages((prev) => [...prev, { role: "agent", text: "Connection error. Please try again." }]);
       setIsThinking(false);
     }
-  }, [agent]);
+  }, [agent, apiKey]);
+
+  useImperativeHandle(ref, () => ({ sendMessage }), [sendMessage]);
 
   const handleMicClick = () => {
     if (!isActive) return;
-    if (isListening) {
-      stopListening();
-    } else {
-      startListening();
-    }
+    if (isListening) stopListening();
+    else startListening();
   };
 
-  const accentColor = `hsl(var(--agent-${agent.colorVar}))`;
+  const accent = `hsl(${agent.accentColor})`;
 
   return (
     <div
       className="flex flex-col rounded-lg border border-border bg-card overflow-hidden h-full"
-      style={{ borderTopColor: accentColor, borderTopWidth: "2px" }}
+      style={{ borderTopColor: accent, borderTopWidth: "2px" }}
     >
-      {/* Header */}
       <div className="p-4 border-b border-border">
         <div className="flex items-center gap-2">
           <span className="text-2xl">{agent.emoji}</span>
@@ -101,17 +94,14 @@ export default function AgentPanel({ agent, isActive }: AgentPanelProps) {
             <p className="text-xs text-muted-foreground">{agent.role}</p>
           </div>
           {isSpeaking && (
-            <Volume2 className="ml-auto h-4 w-4 animate-pulse" style={{ color: accentColor }} />
+            <Volume2 className="ml-auto h-4 w-4 animate-pulse" style={{ color: accent }} />
           )}
         </div>
       </div>
 
-      {/* Chat */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-[200px] max-h-[400px]">
         {messages.length === 0 && !isThinking && (
-          <p className="text-muted-foreground text-sm text-center mt-8 italic">
-            Waiting for input...
-          </p>
+          <p className="text-muted-foreground text-sm text-center mt-8 italic">Waiting for input...</p>
         )}
         <AnimatePresence>
           {messages.map((msg, i) => (
@@ -124,7 +114,7 @@ export default function AgentPanel({ agent, isActive }: AgentPanelProps) {
                   ? "bg-secondary text-secondary-foreground ml-6"
                   : "bg-muted text-foreground mr-6"
               }`}
-              style={msg.role === "agent" ? { borderLeft: `2px solid ${accentColor}` } : undefined}
+              style={msg.role === "agent" ? { borderLeft: `2px solid ${accent}` } : undefined}
             >
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1">
                 {msg.role === "user" ? "You" : agent.name}
@@ -141,7 +131,7 @@ export default function AgentPanel({ agent, isActive }: AgentPanelProps) {
               <span
                 key={i}
                 className="w-2 h-2 rounded-full animate-thinking-dot"
-                style={{ backgroundColor: accentColor, animationDelay: `${i * 0.16}s` }}
+                style={{ backgroundColor: accent, animationDelay: `${i * 0.16}s` }}
               />
             ))}
           </div>
@@ -149,19 +139,12 @@ export default function AgentPanel({ agent, isActive }: AgentPanelProps) {
         <div ref={chatEndRef} />
       </div>
 
-      {/* Mic button */}
       <div className="p-4 border-t border-border flex justify-center">
         <div className="relative">
           {isListening && (
             <>
-              <span
-                className="absolute inset-0 rounded-full animate-pulse-ring"
-                style={{ backgroundColor: accentColor }}
-              />
-              <span
-                className="absolute inset-0 rounded-full animate-pulse-ring"
-                style={{ backgroundColor: accentColor, animationDelay: "0.5s" }}
-              />
+              <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ backgroundColor: accent }} />
+              <span className="absolute inset-0 rounded-full animate-pulse-ring" style={{ backgroundColor: accent, animationDelay: "0.5s" }} />
             </>
           )}
           <button
@@ -169,9 +152,9 @@ export default function AgentPanel({ agent, isActive }: AgentPanelProps) {
             disabled={!isActive || isThinking}
             className="relative z-10 w-14 h-14 rounded-full flex items-center justify-center border-2 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
             style={{
-              borderColor: accentColor,
-              backgroundColor: isListening ? accentColor : "transparent",
-              color: isListening ? "hsl(var(--background))" : accentColor,
+              borderColor: accent,
+              backgroundColor: isListening ? accent : "transparent",
+              color: isListening ? "hsl(var(--background))" : accent,
             }}
           >
             <Mic className="h-6 w-6" />
@@ -186,4 +169,7 @@ export default function AgentPanel({ agent, isActive }: AgentPanelProps) {
       )}
     </div>
   );
-}
+});
+
+AgentPanel.displayName = "AgentPanel";
+export default AgentPanel;
