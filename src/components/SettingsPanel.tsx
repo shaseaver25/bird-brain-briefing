@@ -32,6 +32,7 @@ const EMPTY_AGENT: Omit<AgentConfig, "id"> = {
   voiceId: "",
   apiUrl: "",
   accentColor: "210 80% 55%",
+  speakOrder: 99,
 };
 
 const inputClass =
@@ -95,6 +96,18 @@ function AgentForm({
               title={c.label}
             />
           ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">Speak order</label>
+          <input
+            type="number"
+            min={1}
+            className={inputClass + " w-full"}
+            value={agent.speakOrder ?? 1}
+            onChange={(e) => onChange("speakOrder", e.target.value)}
+          />
         </div>
       </div>
       {children}
@@ -191,7 +204,7 @@ export default function SettingsPanel({
               <div className="mb-3">
                 <AgentForm
                   agent={newAgent}
-                  onChange={(f, v) => setNewAgent((a) => ({ ...a, [f]: v }))}
+                  onChange={(f, v) => setNewAgent((a) => ({ ...a, [f]: f === "speakOrder" ? Number(v) : v }))}
                 >
                   <div className="flex gap-2 pt-1">
                     <button
@@ -240,7 +253,7 @@ export default function SettingsPanel({
                     <div className="border-t border-border">
                       <AgentForm
                         agent={agent}
-                        onChange={(f, v) => onUpdateAgent(agent.id, { [f]: v })}
+                        onChange={(f, v) => onUpdateAgent(agent.id, { [f]: f === "speakOrder" ? Number(v) : v })}
                       >
                         <div className="px-0 pt-1">
                           <button
