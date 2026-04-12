@@ -18,20 +18,20 @@ export type Database = {
         Row: {
           agents: Json
           api_key: string
-          id: string
           updated_at: string
+          user_id: string
         }
         Insert: {
           agents?: Json
           api_key?: string
-          id?: string
           updated_at?: string
+          user_id: string
         }
         Update: {
           agents?: Json
           api_key?: string
-          id?: string
           updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
