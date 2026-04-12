@@ -4,6 +4,16 @@ import { Volume2 } from "lucide-react";
 import { textToSpeech } from "@/lib/elevenlabs";
 import { AgentConfig } from "@/hooks/useAgentStore";
 
+import merlinAvatar from "@/assets/merlin-avatar.png";
+import ospreyAvatar from "@/assets/osprey-avatar.png";
+import saleshawkAvatar from "@/assets/saleshawk-avatar.png";
+
+const AVATAR_MAP: Record<string, string> = {
+  merlin: merlinAvatar,
+  osprey: ospreyAvatar,
+  saleshawk: saleshawkAvatar,
+};
+
 interface ChatMessage {
   role: "user" | "agent";
   text: string;
