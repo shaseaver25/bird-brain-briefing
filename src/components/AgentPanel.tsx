@@ -130,11 +130,14 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
     >
       {/* Avatar banner */}
       {getAvatar(agent) && (
-        <div className="w-full h-32 overflow-hidden">
+        <div
+          className="w-full h-32 overflow-hidden flex items-center justify-center"
+          style={{ backgroundColor: `hsl(${agent.accentColor} / 0.1)` }}
+        >
           <img
             src={getAvatar(agent)}
             alt={`${agent.name} avatar`}
-            className="w-full h-full object-cover object-top"
+            className="w-full h-full object-contain"
           />
         </div>
       )}
