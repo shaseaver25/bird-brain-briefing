@@ -34,33 +34,56 @@ export default function Index() {
   }, [store.agents]);
 
   // Send message to targeted agents in parallel, then speak in order
+  // Queue for TTS playback in speak-order
+  const ttsQueueRef = useRef<{ agent: typeof store.agents[0]; handle: AgentPanelHandle; reply: string }[]>([]);
+  const ttsPlayingRef = useRef(false);
+
+  const processTtsQueue = useCallback(async () => {
+    if (ttsPlayingRef.current) return;
+    ttsPlayingRef.current = true;
+    while (ttsQueueRef.current.length > 0) {
+      if (abortRef.current) break;
+      // Sort by speakOrder so agents speak in configured order
+      ttsQueueRef.current.sort((a, b) => a.agent.speakOrder - b.agent.speakOrder);
+      const item = ttsQueueRef.current.shift()!;
+      if (abortRef.current) break;
+      await item.handle.speak(item.reply);
+    }
+    ttsPlayingRef.current = false;
+  }, []);
+
   const broadcastMessage = useCallback(async (text: string) => {
     if (!text.trim() || !meetingActive || isBroadcasting) return;
     setIsBroadcasting(true);
     abortRef.current = false;
+    ttsQueueRef.current = [];
+    ttsPlayingRef.current = false;
 
     const targetAgents = detectTargetAgents(text);
+    let resolved = 0;
 
-    const agentPromises = targetAgents.map((agent) => {
+    // Fire all requests simultaneously
+    const promises = targetAgents.map(async (agent) => {
       const handle = panelRefs.current.get(agent.id);
-      return {
-        agent,
-        handle,
-        replyPromise: handle ? handle.sendMessage(text) : Promise.resolve(""),
-      };
+      if (!handle) return;
+      const reply = await handle.sendMessage(text);
+      if (abortRef.current || !reply) return;
+      // Queue for TTS and kick off processing
+      ttsQueueRef.current.push({ agent, handle, reply });
+      processTtsQueue();
+      resolved++;
     });
 
-    for (const { handle, replyPromise } of agentPromises) {
+    await Promise.all(promises);
+
+    // Wait for TTS queue to drain
+    while (ttsPlayingRef.current || ttsQueueRef.current.length > 0) {
       if (abortRef.current) break;
-      const reply = await replyPromise;
-      if (abortRef.current) break;
-      if (handle && reply) {
-        await handle.speak(reply);
-      }
+      await new Promise((r) => setTimeout(r, 100));
     }
 
     setIsBroadcasting(false);
-  }, [meetingActive, detectTargetAgents, isBroadcasting]);
+  }, [meetingActive, detectTargetAgents, isBroadcasting, processTtsQueue]);
 
   const handleStop = useCallback(() => {
     abortRef.current = true;
