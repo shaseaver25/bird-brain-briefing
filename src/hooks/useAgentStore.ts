@@ -6,6 +6,7 @@ export interface AgentConfig {
   emoji: string;
   role: string;
   voiceId: string;
+  agentId: string; // ID sent in POST body to identify which agent responds
   apiUrl: string;
   accentColor: string; // raw HSL like "173 80% 40%"
   speakOrder: number; // determines response order in meetings
