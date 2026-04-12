@@ -16,6 +16,10 @@ const AVATAR_MAP: Record<string, string> = {
   wren: wrenAvatar,
 };
 
+function getAvatar(agent: { id: string; name: string }): string | undefined {
+  return AVATAR_MAP[agent.id] || AVATAR_MAP[agent.name.toLowerCase()];
+}
+
 interface ChatMessage {
   role: "user" | "agent";
   text: string;
