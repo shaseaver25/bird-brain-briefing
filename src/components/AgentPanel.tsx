@@ -63,17 +63,30 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
     if (silentMode) return;
     setIsSpeaking(true);
     try {
-      const audio = await textToSpeech(text, agent.voiceId, apiKey);
-      if (audio) {
-        await new Promise<void>((resolve) => {
-          audio.onended = () => { setIsSpeaking(false); resolve(); };
-          audio.onerror = () => { setIsSpeaking(false); resolve(); };
-          audio.play().catch(() => { setIsSpeaking(false); resolve(); });
-        });
-      } else {
-        setIsSpeaking(false);
+      // Split into sentences for pipelined TTS
+      const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+      let nextAudioPromise: Promise<HTMLAudioElement | null> | null = null;
+
+      for (let i = 0; i < sentences.length; i++) {
+        // Use pre-fetched audio or fetch first sentence now
+        const audioPromise = nextAudioPromise || textToSpeech(sentences[i].trim(), agent.voiceId, apiKey);
+        // Start fetching next sentence while current one plays
+        nextAudioPromise = i + 1 < sentences.length
+          ? textToSpeech(sentences[i + 1].trim(), agent.voiceId, apiKey)
+          : null;
+
+        const audio = await audioPromise;
+        if (audio) {
+          await new Promise<void>((resolve) => {
+            audio.onended = () => resolve();
+            audio.onerror = () => resolve();
+            audio.play().catch(() => resolve());
+          });
+        }
       }
     } catch {
+      // ignore
+    } finally {
       setIsSpeaking(false);
     }
   }, [agent, apiKey, silentMode]);

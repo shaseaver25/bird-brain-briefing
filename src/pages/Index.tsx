@@ -26,17 +26,20 @@ export default function Index() {
     if (!text.trim() || !meetingActive || isBroadcasting) return;
     setIsBroadcasting(true);
 
-    // Fire all API calls in parallel
-    const results = await Promise.all(
-      store.agents.map(async (agent) => {
-        const handle = panelRefs.current.get(agent.id);
-        const reply = handle ? await handle.sendMessage(text) : "";
-        return { agent, reply, handle };
-      })
-    );
+    // Create a promise for each agent's API response
+    const agentPromises = store.agents.map((agent) => {
+      const handle = panelRefs.current.get(agent.id);
+      return {
+        agent,
+        handle,
+        replyPromise: handle ? handle.sendMessage(text) : Promise.resolve(""),
+      };
+    });
 
-    // Play TTS sequentially in speakOrder (agents already sorted)
-    for (const { reply, handle } of results) {
+    // Speak in order: await each agent's response then speak immediately,
+    // while later agents may still be fetching in parallel
+    for (const { handle, replyPromise } of agentPromises) {
+      const reply = await replyPromise;
       if (handle && reply) {
         await handle.speak(reply);
       }
