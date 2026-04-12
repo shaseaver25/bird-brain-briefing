@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Play, Radio, Send, Mic } from "lucide-react";
+import { Play, Radio, Send, Mic, Volume2, VolumeX } from "lucide-react";
 import AgentPanel, { AgentPanelHandle } from "@/components/AgentPanel";
 import SettingsPanel from "@/components/SettingsPanel";
 import { useAgentStore } from "@/hooks/useAgentStore";
@@ -11,6 +11,7 @@ export default function Index() {
   const [meetingActive, setMeetingActive] = useState(false);
   const [askAllText, setAskAllText] = useState("");
   const [isBroadcasting, setIsBroadcasting] = useState(false);
+  const [silentMode, setSilentMode] = useState(false);
   const panelRefs = useRef<Map<string, AgentPanelHandle>>(new Map());
   const { isListening, transcript, startListening, stopListening } = useSpeechRecognition();
   const prevTranscriptRef = useRef("");
@@ -137,6 +138,20 @@ export default function Index() {
             <span className="text-xs text-muted-foreground font-mono">
               {isBroadcasting ? "AGENTS RESPONDING..." : meetingActive ? "MEETING IN SESSION" : "STANDBY"}
             </span>
+            {meetingActive && (
+              <button
+                onClick={() => setSilentMode(!silentMode)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono transition-colors"
+                style={{
+                  backgroundColor: silentMode ? "hsl(var(--primary) / 0.15)" : "transparent",
+                  color: silentMode ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))",
+                }}
+                title={silentMode ? "Silent mode ON — text only" : "Sound ON — voice responses"}
+              >
+                {silentMode ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+                {silentMode ? "SILENT" : "SOUND"}
+              </button>
+            )}
           </div>
 
           {meetingActive && (
@@ -213,6 +228,7 @@ export default function Index() {
                 agent={agent}
                 isActive={meetingActive}
                 apiKey={store.apiKey}
+                silentMode={silentMode}
               />
             </motion.div>
           ))}
