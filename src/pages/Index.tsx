@@ -328,6 +328,15 @@ export default function Index({ userId }: IndexProps) {
                 isActive={meetingActive}
                 apiKey={store.apiKey}
                 silentMode={silentMode}
+                inMeeting={meetingParticipants.has(agent.id)}
+                onToggleMeeting={() => {
+                  setMeetingParticipants((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(agent.id)) next.delete(agent.id);
+                    else next.add(agent.id);
+                    return next;
+                  });
+                }}
               />
             </motion.div>
           ))}
