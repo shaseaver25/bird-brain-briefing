@@ -184,8 +184,17 @@ export default function Index() {
               className={`w-2 h-2 rounded-full ${meetingActive ? "bg-primary animate-pulse" : "bg-muted-foreground"}`}
             />
             <span className="text-xs text-muted-foreground font-mono">
-              {isBroadcasting ? "AGENTS RESPONDING..." : meetingActive ? "MEETING IN SESSION" : "STANDBY"}
+            {isBroadcasting ? "AGENTS RESPONDING..." : meetingActive ? "MEETING IN SESSION" : "STANDBY"}
             </span>
+            {isBroadcasting && (
+              <button
+                onClick={handleStop}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono bg-destructive/15 text-destructive hover:bg-destructive/25 transition-colors"
+              >
+                <Square className="h-3 w-3 fill-current" />
+                STOP
+              </button>
+            )}
             {meetingActive && (
               <button
                 onClick={() => setSilentMode(!silentMode)}
