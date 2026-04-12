@@ -122,9 +122,20 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
       className="flex flex-col rounded-lg border border-border bg-card overflow-hidden h-full"
       style={{ borderTopColor: accent, borderTopWidth: "2px" }}
     >
+      {/* Avatar banner */}
+      {AVATAR_MAP[agent.id] && (
+        <div className="w-full h-32 overflow-hidden">
+          <img
+            src={AVATAR_MAP[agent.id]}
+            alt={`${agent.name} avatar`}
+            className="w-full h-full object-cover object-top"
+          />
+        </div>
+      )}
+
       <div className="p-4 border-b border-border">
         <div className="flex items-center gap-2">
-          <span className="text-2xl">{agent.emoji}</span>
+          {!AVATAR_MAP[agent.id] && <span className="text-2xl">{agent.emoji}</span>}
           <div>
             <h3 className="font-semibold text-foreground text-lg font-mono">{agent.name}</h3>
             <p className="text-xs text-muted-foreground">{agent.role}</p>
