@@ -32,6 +32,7 @@ const EMPTY_AGENT: Omit<AgentConfig, "id"> = {
   voiceId: "",
   apiUrl: "",
   accentColor: "210 80% 55%",
+  speakOrder: 99,
 };
 
 const inputClass =
@@ -95,6 +96,18 @@ function AgentForm({
               title={c.label}
             />
           ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">Speak order</label>
+          <input
+            type="number"
+            min={1}
+            className={inputClass + " w-full"}
+            value={agent.speakOrder ?? 1}
+            onChange={(e) => onChange("speakOrder", e.target.value)}
+          />
         </div>
       </div>
       {children}
