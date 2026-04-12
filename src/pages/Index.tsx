@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Play, Radio, Send, Mic, Volume2, VolumeX, RotateCcw, Square } from "lucide-react";
 import AgentPanel, { AgentPanelHandle } from "@/components/AgentPanel";
@@ -64,6 +64,8 @@ export default function Index() {
 
   const handleStop = useCallback(() => {
     abortRef.current = true;
+    // Stop all currently speaking agents
+    panelRefs.current.forEach((handle) => handle.stopSpeaking());
     setIsBroadcasting(false);
   }, []);
 
@@ -78,10 +80,12 @@ export default function Index() {
   };
 
   // When speech recognition ends with a transcript, broadcast it
-  if (!isListening && transcript && transcript !== prevTranscriptRef.current) {
-    prevTranscriptRef.current = transcript;
-    broadcastMessage(transcript);
-  }
+  useEffect(() => {
+    if (!isListening && transcript && transcript !== prevTranscriptRef.current) {
+      prevTranscriptRef.current = transcript;
+      broadcastMessage(transcript);
+    }
+  }, [isListening, transcript, broadcastMessage]);
 
   const handleAskAll = () => {
     const text = askAllText.trim();

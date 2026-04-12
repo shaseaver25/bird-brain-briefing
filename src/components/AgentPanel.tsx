@@ -17,10 +17,9 @@ interface AgentPanelProps {
 }
 
 export interface AgentPanelHandle {
-  /** Send a message and fetch response (no TTS). Returns the reply text. */
   sendMessage: (text: string) => Promise<string>;
-  /** Play TTS for a given text. Returns when audio finishes. */
   speak: (text: string) => Promise<void>;
+  stopSpeaking: () => void;
 }
 
 const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isActive, apiKey, silentMode }, ref) => {
@@ -28,6 +27,8 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
   const [isThinking, setIsThinking] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const abortSpeakRef = useRef(false);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -59,29 +60,40 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
     }
   }, [agent]);
 
+  const stopSpeaking = useCallback(() => {
+    abortSpeakRef.current = true;
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+    setIsSpeaking(false);
+  }, []);
+
   const speak = useCallback(async (text: string): Promise<void> => {
     if (silentMode) return;
+    abortSpeakRef.current = false;
     setIsSpeaking(true);
     try {
-      // Split into sentences for pipelined TTS
       const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
       let nextAudioPromise: Promise<HTMLAudioElement | null> | null = null;
 
       for (let i = 0; i < sentences.length; i++) {
-        // Use pre-fetched audio or fetch first sentence now
+        if (abortSpeakRef.current) break;
         const audioPromise = nextAudioPromise || textToSpeech(sentences[i].trim(), agent.voiceId, apiKey);
-        // Start fetching next sentence while current one plays
         nextAudioPromise = i + 1 < sentences.length
           ? textToSpeech(sentences[i + 1].trim(), agent.voiceId, apiKey)
           : null;
 
         const audio = await audioPromise;
+        if (abortSpeakRef.current) break;
         if (audio) {
+          currentAudioRef.current = audio;
           await new Promise<void>((resolve) => {
             audio.onended = () => resolve();
             audio.onerror = () => resolve();
             audio.play().catch(() => resolve());
           });
+          currentAudioRef.current = null;
         }
       }
     } catch {
@@ -91,7 +103,7 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
     }
   }, [agent, apiKey, silentMode]);
 
-  useImperativeHandle(ref, () => ({ sendMessage, speak }), [sendMessage, speak]);
+  useImperativeHandle(ref, () => ({ sendMessage, speak, stopSpeaking }), [sendMessage, speak, stopSpeaking]);
 
   const accent = `hsl(${agent.accentColor})`;
 
