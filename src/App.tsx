@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import Index from "./pages/Index.tsx";
+import AgentDashboard from "./pages/AgentDashboard.tsx";
 import AuthPage from "./pages/AuthPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -49,6 +50,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<AuthGate />} />
+          <Route path="/agent/:agentId" element={<AuthGate />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
