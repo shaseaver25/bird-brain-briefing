@@ -30,6 +30,7 @@ const EMPTY_AGENT: Omit<AgentConfig, "id"> = {
   emoji: "🦅",
   role: "",
   voiceId: "",
+  agentId: "",
   apiUrl: "",
   accentColor: "210 80% 55%",
   speakOrder: 99,
