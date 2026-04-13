@@ -31,19 +31,13 @@ export default function Index({ userId }: IndexProps) {
   }, []);
 
   // Detect if user is addressing a specific agent by name
-  // fromMic: if true, only return agents explicitly named (don't fall back to all)
-  const detectTargetAgents = useCallback((text: string, fromMic = false) => {
+  const detectTargetAgents = useCallback((text: string) => {
     const participating = store.agents.filter(
-      (a) => meetingParticipants.has(a.id) && a.apiUrl // skip agents without an API URL
+      (a) => meetingParticipants.has(a.id) && a.apiUrl
     );
     const lower = text.toLowerCase();
     const matched = participating.filter((a) => lower.includes(a.name.toLowerCase()));
-    if (matched.length > 0) {
-      return matched;
-    }
-    // For mic input, require explicit name — don't broadcast to everyone
-    if (fromMic) return [];
-    return participating;
+    return matched.length > 0 ? matched : participating;
   }, [store.agents, meetingParticipants]);
 
   // Send message to targeted agents in parallel, then speak in order
@@ -65,14 +59,14 @@ export default function Index({ userId }: IndexProps) {
     ttsPlayingRef.current = false;
   }, []);
 
-  const broadcastMessage = useCallback(async (text: string, fromMic = false) => {
+  const broadcastMessage = useCallback(async (text: string) => {
     if (!text.trim() || !meetingActive || isBroadcasting) return;
     setIsBroadcasting(true);
     abortRef.current = false;
     ttsQueueRef.current = [];
     ttsPlayingRef.current = false;
 
-    const targetAgents = detectTargetAgents(text, fromMic);
+    const targetAgents = detectTargetAgents(text);
     if (targetAgents.length === 0) {
       console.log("No agents targeted, skipping broadcast");
       setIsBroadcasting(false);
@@ -124,7 +118,7 @@ export default function Index({ userId }: IndexProps) {
   useEffect(() => {
     if (!isListening && transcript && transcript !== prevTranscriptRef.current) {
       prevTranscriptRef.current = transcript;
-      broadcastMessage(transcript, true); // fromMic = true, require agent name
+      broadcastMessage(transcript);
     }
   }, [isListening, transcript, broadcastMessage]);
 
