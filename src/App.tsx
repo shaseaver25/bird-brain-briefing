@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
+import Index from "./pages/Index";
 import StaffMeetingPage from "./pages/StaffMeetingPage";
 import KiroDashboardPage from "./pages/KiroDashboardPage";
 import AuthPage from "./pages/AuthPage";
