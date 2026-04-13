@@ -65,6 +65,17 @@ const DEFAULT_AGENTS: AgentConfig[] = [
     accentColor: "260 60% 60%",
     speakOrder: 4,
   },
+  {
+    id: "kiro",
+    name: "Kiro",
+    emoji: "☁️",
+    role: "Cloud Orchestrator",
+    voiceId: "ErXwobaYiN019PkySvjV",
+    agentId: "kiro",
+    apiUrl: "",
+    accentColor: "210 80% 55%",
+    speakOrder: 5,
+  },
 ];
 
 function loadLocalState(): StoreState {
