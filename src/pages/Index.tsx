@@ -59,7 +59,7 @@ export default function Index({ userId }: IndexProps) {
     ttsPlayingRef.current = false;
   }, []);
 
-  const broadcastMessage = useCallback(async (text: string, fromMic = false) => {
+  const broadcastMessage = useCallback(async (text: string) => {
     if (!text.trim() || !meetingActive || isBroadcasting) return;
     setIsBroadcasting(true);
     abortRef.current = false;
