@@ -67,7 +67,7 @@ const DEFAULT_AGENTS: AgentConfig[] = [
   },
   {
     id: "kiro",
-    name: "Kiro",
+    name: "Warbler",
     emoji: "☁️",
     role: "Cloud Orchestrator",
     voiceId: "ErXwobaYiN019PkySvjV",
