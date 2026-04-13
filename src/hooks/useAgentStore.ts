@@ -72,7 +72,7 @@ const DEFAULT_AGENTS: AgentConfig[] = [
     role: "Cloud Orchestrator",
     voiceId: "ErXwobaYiN019PkySvjV",
     agentId: "kiro",
-    apiUrl: "",
+    apiUrl: "https://x3dabj2fiompspg7x7dnhid3se0spttn.lambda-url.us-east-1.on.aws/",
     accentColor: "210 80% 55%",
     speakOrder: 5,
   },
