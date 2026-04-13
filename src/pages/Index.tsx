@@ -66,7 +66,7 @@ export default function Index({ userId }: IndexProps) {
     ttsQueueRef.current = [];
     ttsPlayingRef.current = false;
 
-    const targetAgents = detectTargetAgents(text, fromMic);
+    const targetAgents = detectTargetAgents(text);
     if (targetAgents.length === 0) {
       console.log("No agents targeted, skipping broadcast");
       setIsBroadcasting(false);
@@ -118,7 +118,7 @@ export default function Index({ userId }: IndexProps) {
   useEffect(() => {
     if (!isListening && transcript && transcript !== prevTranscriptRef.current) {
       prevTranscriptRef.current = transcript;
-      broadcastMessage(transcript, true); // fromMic = true, require agent name
+      broadcastMessage(transcript);
     }
   }, [isListening, transcript, broadcastMessage]);
 
