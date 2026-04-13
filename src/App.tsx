@@ -14,7 +14,7 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-function AuthGate({ children }: { children: React.ReactNode }) {
+function AuthGate({ children }: { children: React.ReactNode | ((userId: string) => React.ReactNode) }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -40,7 +40,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
   if (!user) return <AuthPage />;
 
-  return <>{children}</>;
+  return <>{typeof children === 'function' ? children(user.id) : children}</>;
 }
 
 const App = () => (
@@ -50,7 +50,8 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<AuthGate><StaffMeetingPage /></AuthGate>} />
+          <Route path="/" element={<AuthGate>{(userId: string) => <Index userId={userId} />}</AuthGate>} />
+          <Route path="/meeting" element={<AuthGate><StaffMeetingPage /></AuthGate>} />
           <Route path="/dashboard/:agentId" element={<AuthGate><KiroDashboardPage /></AuthGate>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
