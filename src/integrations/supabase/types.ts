@@ -121,6 +121,7 @@ export type Database = {
       }
       agents: {
         Row: {
+          api_url: string | null
           avatar_url: string | null
           created_at: string
           description: string | null
@@ -131,6 +132,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          api_url?: string | null
           avatar_url?: string | null
           created_at?: string
           description?: string | null
@@ -141,6 +143,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          api_url?: string | null
           avatar_url?: string | null
           created_at?: string
           description?: string | null
