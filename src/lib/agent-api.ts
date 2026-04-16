@@ -111,19 +111,19 @@ async function loadHistory(agentId: string, sessionId: string): Promise<{ role: 
   if (!user) return [];
 
   const displayName = OPENCLAW_NAME_MAP[agentId.toLowerCase()] || agentId;
-  const { data: agent } = await supabase.from("agents").select("id").ilike("name", displayName).single();
+  const { data: agent } = await (supabase.from("agents" as any).select("id").ilike("name", displayName).single() as any);
   if (!agent) return [];
 
-  const { data } = await supabase
-    .from("conversations")
+  const { data } = await (supabase
+    .from("conversations" as any)
     .select("role, content")
     .eq("user_id", user.id)
     .eq("agent_id", agent.id)
     .eq("session_id", sessionId)
     .order("created_at", { ascending: true })
-    .limit(20);
+    .limit(20) as any);
 
-  return (data ?? []).map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+  return (data ?? []).map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content }));
 }
 
 async function saveHistory(agentId: string, sessionId: string, userMsg: string, assistantMsg: string) {
