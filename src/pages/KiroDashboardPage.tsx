@@ -22,7 +22,7 @@ function resolveWidgetKey(agent: { name: string; role: string }): string | null 
   if (ROLE_WIDGETS[name]) return name;
   // Fallback: match by role keywords
   const role = agent.role.toLowerCase();
-  if (role.includes('strategy')) return 'wren';
+  if (role.includes('strategy') || role.includes('executive')) return 'wren';
   if (role.includes('sales')) return 'saleshawk';
   if (role.includes('architect')) return 'osprey';
   if (role.includes('project') || role.includes('tracker')) return 'merlin';
@@ -64,7 +64,10 @@ export default function KiroDashboardPage() {
     warbler: { name: 'Kiro', role: 'Cloud Orchestrator' },
   };
 
-  const displayAgent = agent || (agentId ? FALLBACK_AGENTS[agentId.toLowerCase()] : null);
+  // Try fallback by name key first, then search app_config agents by UUID
+  const displayAgent = agent
+    || (agentId && FALLBACK_AGENTS[agentId.toLowerCase()])
+    || null;
 
   if (agentLoading || configLoading) {
     return (
