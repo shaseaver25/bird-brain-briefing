@@ -88,21 +88,20 @@ async function resolveAgentProfile(agentId: string): Promise<{
   const displayName = OPENCLAW_NAME_MAP[agentId.toLowerCase()] || agentId;
 
   // Look up agent UUID by name
-  const { data: agent } = await supabase
-    .from("agents")
+  const { data: agent } = await (supabase
+    .from("agents" as any)
     .select("id")
     .ilike("name", displayName)
-    .single();
+    .single() as any);
 
   if (!agent) return null;
 
-  // Load agent profile
   const { data: profile } = await (supabase
-    .from("agent_profiles")
+    .from("agent_profiles" as any)
     .select("system_prompt, model, temperature, max_tokens, metadata")
     .eq("agent_id", agent.id)
     .eq("is_active", true)
-    .single() as unknown as Promise<{ data: { system_prompt: string; model: string; temperature: number; max_tokens: number; metadata: Record<string, unknown> } | null }>);
+    .single() as any);
 
   return profile ?? null;
 }
@@ -112,19 +111,19 @@ async function loadHistory(agentId: string, sessionId: string): Promise<{ role: 
   if (!user) return [];
 
   const displayName = OPENCLAW_NAME_MAP[agentId.toLowerCase()] || agentId;
-  const { data: agent } = await supabase.from("agents").select("id").ilike("name", displayName).single();
+  const { data: agent } = await (supabase.from("agents" as any).select("id").ilike("name", displayName).single() as any);
   if (!agent) return [];
 
-  const { data } = await supabase
-    .from("conversations")
+  const { data } = await (supabase
+    .from("conversations" as any)
     .select("role, content")
     .eq("user_id", user.id)
     .eq("agent_id", agent.id)
     .eq("session_id", sessionId)
     .order("created_at", { ascending: true })
-    .limit(20);
+    .limit(20) as any);
 
-  return (data ?? []).map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+  return (data ?? []).map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content }));
 }
 
 async function saveHistory(agentId: string, sessionId: string, userMsg: string, assistantMsg: string) {
@@ -132,10 +131,10 @@ async function saveHistory(agentId: string, sessionId: string, userMsg: string, 
   if (!user) return;
 
   const displayName = OPENCLAW_NAME_MAP[agentId.toLowerCase()] || agentId;
-  const { data: agent } = await supabase.from("agents").select("id").ilike("name", displayName).single();
+  const { data: agent } = await (supabase.from("agents" as any).select("id").ilike("name", displayName).single() as any);
   if (!agent) return;
 
-  await supabase.from("conversations").insert([
+  await (supabase.from("conversations" as any) as any).insert([
     { user_id: user.id, agent_id: agent.id, session_id: sessionId, role: "user", content: userMsg },
     { user_id: user.id, agent_id: agent.id, session_id: sessionId, role: "assistant", content: assistantMsg },
   ]);

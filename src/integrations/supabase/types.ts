@@ -14,6 +14,56 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_memory: {
+        Row: {
+          agent_id: string
+          confidence: number
+          content: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          memory_type: Database["public"]["Enums"]["memory_type"]
+          source: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          confidence?: number
+          content: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          memory_type?: Database["public"]["Enums"]["memory_type"]
+          source?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          confidence?: number
+          content?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          memory_type?: Database["public"]["Enums"]["memory_type"]
+          source?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_memory_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_notes: {
         Row: {
           agent_id: string
@@ -46,6 +96,59 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      agent_profiles: {
+        Row: {
+          agent_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          max_tokens: number
+          mcp_tools: Json
+          metadata: Json
+          model: string
+          system_prompt: string
+          temperature: number
+          tool_permissions: Json
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          max_tokens?: number
+          mcp_tools?: Json
+          metadata?: Json
+          model?: string
+          system_prompt?: string
+          temperature?: number
+          tool_permissions?: Json
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          max_tokens?: number
+          mcp_tools?: Json
+          metadata?: Json
+          model?: string
+          system_prompt?: string
+          temperature?: number
+          tool_permissions?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_profiles_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: true
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       agent_tasks: {
         Row: {
@@ -129,6 +232,7 @@ export type Database = {
           name: string
           role: string
           status: string
+          system_prompt_preview: string | null
           updated_at: string
         }
         Insert: {
@@ -140,6 +244,7 @@ export type Database = {
           name: string
           role: string
           status?: string
+          system_prompt_preview?: string | null
           updated_at?: string
         }
         Update: {
@@ -151,6 +256,7 @@ export type Database = {
           name?: string
           role?: string
           status?: string
+          system_prompt_preview?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -160,21 +266,68 @@ export type Database = {
           agents: Json
           api_key: string
           updated_at: string
+          use_mcp_backend: boolean
           user_id: string
         }
         Insert: {
           agents?: Json
           api_key?: string
           updated_at?: string
+          use_mcp_backend?: boolean
           user_id: string
         }
         Update: {
           agents?: Json
           api_key?: string
           updated_at?: string
+          use_mcp_backend?: boolean
           user_id?: string
         }
         Relationships: []
+      }
+      conversations: {
+        Row: {
+          agent_id: string
+          content: string
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["message_role"]
+          session_id: string
+          token_count: number | null
+          tool_calls: Json | null
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          content: string
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["message_role"]
+          session_id?: string
+          token_count?: number | null
+          tool_calls?: Json | null
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["message_role"]
+          session_id?: string
+          token_count?: number | null
+          tool_calls?: Json | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       dashboard_configs: {
         Row: {
@@ -212,6 +365,95 @@ export type Database = {
             foreignKeyName: "dashboard_configs_agent_id_fkey"
             columns: ["agent_id"]
             isOneToOne: true
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mcp_tools: {
+        Row: {
+          auth_config: Json
+          auth_type: string
+          category: string
+          created_at: string
+          display_name: string
+          health_status: string
+          id: string
+          is_enabled: boolean
+          last_health_check: string | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          auth_config?: Json
+          auth_type?: string
+          category?: string
+          created_at?: string
+          display_name: string
+          health_status?: string
+          id?: string
+          is_enabled?: boolean
+          last_health_check?: string | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          auth_config?: Json
+          auth_type?: string
+          category?: string
+          created_at?: string
+          display_name?: string
+          health_status?: string
+          id?: string
+          is_enabled?: boolean
+          last_health_check?: string | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      shared_context: {
+        Row: {
+          content: string
+          context_key: string
+          created_at: string
+          created_by_agent: string | null
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          metadata: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          context_key: string
+          created_at?: string
+          created_by_agent?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          context_key?: string
+          created_at?: string
+          created_by_agent?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shared_context_created_by_agent_fkey"
+            columns: ["created_by_agent"]
+            isOneToOne: false
             referencedRelation: "agents"
             referencedColumns: ["id"]
           },
@@ -260,6 +502,8 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
+      memory_type: "fact" | "preference" | "learned" | "instruction"
+      message_role: "user" | "assistant" | "system"
       task_priority: "low" | "medium" | "high"
       task_status: "todo" | "in_progress" | "done"
     }
@@ -389,6 +633,8 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      memory_type: ["fact", "preference", "learned", "instruction"],
+      message_role: ["user", "assistant", "system"],
       task_priority: ["low", "medium", "high"],
       task_status: ["todo", "in_progress", "done"],
     },
