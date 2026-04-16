@@ -60,6 +60,9 @@ export default function Index({ userId }: IndexProps) {
     ttsPlayingRef.current = false;
   }, []);
 
+  // Shared meeting transcript — persists across rounds so agents remember the full conversation
+  const meetingTranscriptRef = useRef<string[]>([]);
+
   const broadcastMessage = useCallback(async (text: string) => {
     if (!text.trim() || !meetingActive || isBroadcasting) return;
     setIsBroadcasting(true);
@@ -73,30 +76,42 @@ export default function Index({ userId }: IndexProps) {
       setIsBroadcasting(false);
       return;
     }
-    let resolved = 0;
 
-    // Fire all requests simultaneously
-    const promises = targetAgents.map(async (agent) => {
-      const handle = panelRefs.current.get(agent.id);
-      if (!handle) return;
-      const reply = await handle.sendMessage(text);
-      if (abortRef.current || !reply) return;
-      // Queue for TTS and kick off processing
-      ttsQueueRef.current.push({ agent, handle, reply });
-      processTtsQueue();
-      resolved++;
-    });
+    // Add Shannon's message to the transcript
+    meetingTranscriptRef.current.push(`Shannon: ${text}`);
 
-    await Promise.all(promises);
+    // Sort agents by speakOrder so they go in turn
+    const sorted = [...targetAgents].sort((a, b) => a.speakOrder - b.speakOrder);
 
-    // Wait for TTS queue to drain
-    while (ttsPlayingRef.current || ttsQueueRef.current.length > 0) {
+    // Send sequentially — each agent sees what came before
+    for (const agent of sorted) {
       if (abortRef.current) break;
-      await new Promise((r) => setTimeout(r, 100));
+      const handle = panelRefs.current.get(agent.id);
+      if (!handle) continue;
+
+      // Send with meeting transcript so this agent can "hear" everyone
+      const reply = await handle.sendMeetingMessage(text, [...meetingTranscriptRef.current]);
+      if (abortRef.current || !reply) continue;
+
+      // Skip silent responses (agent chose not to speak)
+      if (reply.trim() === "---") continue;
+
+      // Add this agent's response to the transcript for the next agent
+      meetingTranscriptRef.current.push(`${agent.name}: ${reply}`);
+
+      // Speak immediately (no queue needed — we're already sequential)
+      if (!abortRef.current) {
+        await handle.speak(reply);
+      }
+    }
+
+    // Keep transcript trimmed to last 40 entries to avoid token overflow
+    if (meetingTranscriptRef.current.length > 40) {
+      meetingTranscriptRef.current = meetingTranscriptRef.current.slice(-40);
     }
 
     setIsBroadcasting(false);
-  }, [meetingActive, detectTargetAgents, isBroadcasting, processTtsQueue]);
+  }, [meetingActive, detectTargetAgents, isBroadcasting]);
 
   const handleStop = useCallback(() => {
     abortRef.current = true;
@@ -186,6 +201,7 @@ export default function Index({ userId }: IndexProps) {
             <button
               onClick={async () => {
                 resetSession();
+                meetingTranscriptRef.current = [];
                 // Also try legacy reset if available
                 const baseUrl = store.agents[0]?.apiUrl;
                 if (baseUrl) {

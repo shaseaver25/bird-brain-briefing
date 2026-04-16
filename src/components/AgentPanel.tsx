@@ -42,6 +42,7 @@ interface AgentPanelProps {
 
 export interface AgentPanelHandle {
   sendMessage: (text: string) => Promise<string>;
+  sendMeetingMessage: (text: string, transcript: string[]) => Promise<string>;
   speak: (text: string) => Promise<void>;
   stopSpeaking: () => void;
 }
@@ -70,8 +71,8 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
           message: text,
           sessionId: getSessionId(),
         },
-        agent.apiUrl || undefined,       // fallback URL for legacy mode
-        anthropicKey || apiKey || undefined  // Anthropic key for MCP mode
+        agent.apiUrl || undefined,
+        anthropicKey || apiKey || undefined
       );
 
       const reply = result.response;
@@ -86,6 +87,37 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
       return errorMsg;
     }
   }, [agent]);
+
+  // Meeting-aware send: includes transcript of what other agents said
+  const sendMeetingMessage = useCallback(async (text: string, transcript: string[]): Promise<string> => {
+    setMessages((prev) => [...prev, { role: "user", text }]);
+    setIsThinking(true);
+
+    try {
+      const result = await sendAgentMessage(
+        {
+          agentId: agent.agentId || agent.id,
+          message: text,
+          sessionId: getSessionId(),
+          meetingMode: true,
+          meetingTranscript: transcript,
+        },
+        agent.apiUrl || undefined,
+        anthropicKey || apiKey || undefined
+      );
+
+      const reply = result.response;
+      setMessages((prev) => [...prev, { role: "agent", text: reply }]);
+      setIsThinking(false);
+      return reply;
+    } catch (err) {
+      console.error("Agent error:", err);
+      const errorMsg = "Connection error. Please try again.";
+      setMessages((prev) => [...prev, { role: "agent", text: errorMsg }]);
+      setIsThinking(false);
+      return errorMsg;
+    }
+  }, [agent, anthropicKey, apiKey]);
 
   const stopSpeaking = useCallback(() => {
     abortSpeakRef.current = true;
@@ -130,7 +162,7 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
     }
   }, [agent, apiKey, silentMode]);
 
-  useImperativeHandle(ref, () => ({ sendMessage, speak, stopSpeaking }), [sendMessage, speak, stopSpeaking]);
+  useImperativeHandle(ref, () => ({ sendMessage, sendMeetingMessage, speak, stopSpeaking }), [sendMessage, sendMeetingMessage, speak, stopSpeaking]);
 
   const accent = `hsl(${agent.accentColor})`;
 
