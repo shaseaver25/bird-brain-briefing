@@ -264,6 +264,7 @@ export type Database = {
       app_config: {
         Row: {
           agents: Json
+          anthropic_key: string | null
           api_key: string
           updated_at: string
           use_mcp_backend: boolean
@@ -271,6 +272,7 @@ export type Database = {
         }
         Insert: {
           agents?: Json
+          anthropic_key?: string | null
           api_key?: string
           updated_at?: string
           use_mcp_backend?: boolean
@@ -278,6 +280,7 @@ export type Database = {
         }
         Update: {
           agents?: Json
+          anthropic_key?: string | null
           api_key?: string
           updated_at?: string
           use_mcp_backend?: boolean

@@ -102,7 +102,7 @@ async function loadFromCloud(userId: string): Promise<StoreState | null> {
   try {
     const { data, error } = await supabase
       .from("app_config")
-      .select("agents, api_key")
+      .select("agents, api_key, anthropic_key")
       .eq("user_id", userId)
       .maybeSingle();
 
