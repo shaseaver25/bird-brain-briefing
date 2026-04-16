@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Volume2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { textToSpeech } from "@/lib/elevenlabs";
+import { sendAgentMessage, getSessionId } from "@/lib/agent-api";
 import { AgentConfig } from "@/hooks/useAgentStore";
 
 import merlinAvatar from "@/assets/merlin-avatar.png";
@@ -62,15 +63,17 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
     setIsThinking(true);
 
     try {
-      const res = await fetch(agent.apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agent: agent.agentId, message: text }),
-      });
+      const result = await sendAgentMessage(
+        {
+          agentId: agent.agentId || agent.id,
+          message: text,
+          sessionId: getSessionId(),
+        },
+        agent.apiUrl || undefined,  // fallback URL for legacy mode
+        apiKey || undefined          // Anthropic key for MCP mode
+      );
 
-      const data = await res.json();
-      const reply = data.response || data.message || data.text || JSON.stringify(data);
-
+      const reply = result.response;
       setMessages((prev) => [...prev, { role: "agent", text: reply }]);
       setIsThinking(false);
       return reply;
