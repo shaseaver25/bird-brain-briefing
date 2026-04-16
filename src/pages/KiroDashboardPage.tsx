@@ -48,9 +48,23 @@ export default function KiroDashboardPage() {
     return config.layout_config as unknown as LayoutConfigItem[];
   }, [config]);
 
-  // Resolve role-specific widget set
-  const roleKey = agent ? resolveWidgetKey(agent) : null;
+  // Resolve role-specific widget set — try Supabase agent first, fall back to URL param
+  const roleKey = agent
+    ? resolveWidgetKey(agent)
+    : (agentId && ROLE_WIDGETS[agentId.toLowerCase()]) ? agentId.toLowerCase() : null;
   const RoleWidgets = roleKey ? ROLE_WIDGETS[roleKey] : null;
+
+  // Fallback agent info from URL when Supabase doesn't have the agent
+  const FALLBACK_AGENTS: Record<string, { name: string; role: string }> = {
+    wren: { name: 'Wren', role: 'Strategy Lead' },
+    saleshawk: { name: 'SalesHawk', role: 'Sales Lead' },
+    osprey: { name: 'Osprey', role: 'Agent Architect' },
+    merlin: { name: 'Merlin', role: 'Project Tracker' },
+    kiro: { name: 'Kiro', role: 'Cloud Orchestrator' },
+    warbler: { name: 'Kiro', role: 'Cloud Orchestrator' },
+  };
+
+  const displayAgent = agent || (agentId ? FALLBACK_AGENTS[agentId.toLowerCase()] : null);
 
   if (agentLoading || configLoading) {
     return (
@@ -60,14 +74,18 @@ export default function KiroDashboardPage() {
     );
   }
 
-  if (agentError || !agent) {
+  // Only show error if we have no agent AND no role widgets to fall back to
+  if (!displayAgent && !RoleWidgets) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
-        <p className="text-destructive">Failed to load agent</p>
+        <p className="text-destructive">Agent not found</p>
         <button onClick={() => navigate('/')} className="text-sm text-primary hover:underline">← Back</button>
       </div>
     );
   }
+
+  const agentName = displayAgent?.name || agentId || 'Agent';
+  const agentRole = displayAgent?.role || '';
 
   return (
     <div className="min-h-screen bg-background">
@@ -77,17 +95,19 @@ export default function KiroDashboardPage() {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex items-center gap-3">
-          {agent.avatar_url ? (
-            <img src={agent.avatar_url} alt={agent.name} className="w-10 h-10 rounded-full object-cover" />
+          {agent?.avatar_url ? (
+            <img src={agent.avatar_url} alt={agentName} className="w-10 h-10 rounded-full object-cover" />
           ) : (
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-lg">☁️</div>
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-lg">
+              {agentName.charAt(0)}
+            </div>
           )}
           <div>
-            <h1 className="text-lg font-semibold text-foreground">{agent.name}</h1>
-            <p className="text-sm text-muted-foreground">{agent.role}</p>
+            <h1 className="text-lg font-semibold text-foreground">{agentName}</h1>
+            <p className="text-sm text-muted-foreground">{agentRole}</p>
           </div>
         </div>
-        {agent.status === 'active' && (
+        {agent?.status === 'active' && (
           <span className="ml-auto flex items-center gap-1.5 text-xs text-green-600">
             <span className="w-2 h-2 rounded-full bg-green-500" />
             Active
