@@ -34,6 +34,7 @@ interface AgentPanelProps {
   agent: AgentConfig;
   isActive: boolean;
   apiKey: string;
+  anthropicKey?: string;
   silentMode: boolean;
   inMeeting: boolean;
   onToggleMeeting: () => void;
@@ -45,7 +46,7 @@ export interface AgentPanelHandle {
   stopSpeaking: () => void;
 }
 
-const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isActive, apiKey, silentMode, inMeeting, onToggleMeeting }, ref) => {
+const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isActive, apiKey, anthropicKey, silentMode, inMeeting, onToggleMeeting }, ref) => {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isThinking, setIsThinking] = useState(false);
@@ -69,8 +70,8 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
           message: text,
           sessionId: getSessionId(),
         },
-        agent.apiUrl || undefined,  // fallback URL for legacy mode
-        apiKey || undefined          // Anthropic key for MCP mode
+        agent.apiUrl || undefined,       // fallback URL for legacy mode
+        anthropicKey || apiKey || undefined  // Anthropic key for MCP mode
       );
 
       const reply = result.response;

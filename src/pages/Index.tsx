@@ -5,6 +5,7 @@ import AgentPanel, { AgentPanelHandle } from "@/components/AgentPanel";
 import SettingsPanel from "@/components/SettingsPanel";
 import { useAgentStore } from "@/hooks/useAgentStore";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { resetSession } from "@/lib/agent-api";
 import { supabase } from "@/integrations/supabase/client";
 
 interface IndexProps {
@@ -172,25 +173,30 @@ export default function Index({ userId }: IndexProps) {
             <SettingsPanel
               agents={store.agents}
               apiKey={store.apiKey}
+              anthropicKey={store.anthropicKey}
               onAddAgent={store.addAgent}
               onUpdateAgent={store.updateAgent}
               onRemoveAgent={store.removeAgent}
               onSetApiKey={store.setApiKey}
+              onSetAnthropicKey={store.setAnthropicKey}
               onExport={store.exportConfig}
               onImport={store.importConfig}
             />
 
             <button
               onClick={async () => {
+                resetSession();
+                // Also try legacy reset if available
                 const baseUrl = store.agents[0]?.apiUrl;
-                if (!baseUrl) return;
-                try {
-                  const url = new URL(baseUrl);
-                  await fetch(`${url.origin}/reset`, { method: "POST" });
-                  window.location.reload();
-                } catch (err) {
-                  console.error("Reset failed:", err);
+                if (baseUrl) {
+                  try {
+                    const url = new URL(baseUrl);
+                    await fetch(`${url.origin}/reset`, { method: "POST" });
+                  } catch {
+                    // Legacy reset failed — fine, MCP mode uses session IDs
+                  }
                 }
+                window.location.reload();
               }}
               className="flex items-center gap-2 px-4 py-2.5 rounded-md font-mono text-sm font-medium border border-border text-muted-foreground hover:text-foreground hover:border-primary transition-colors"
             >
@@ -331,6 +337,7 @@ export default function Index({ userId }: IndexProps) {
                 agent={agent}
                 isActive={meetingActive}
                 apiKey={store.apiKey}
+                anthropicKey={store.anthropicKey}
                 silentMode={silentMode}
                 inMeeting={meetingParticipants.has(agent.id)}
                 onToggleMeeting={() => {

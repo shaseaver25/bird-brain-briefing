@@ -6,10 +6,12 @@ import { AgentConfig } from "@/hooks/useAgentStore";
 interface SettingsPanelProps {
   agents: AgentConfig[];
   apiKey: string;
+  anthropicKey: string;
   onAddAgent: (agent: Omit<AgentConfig, "id">) => void;
   onUpdateAgent: (id: string, updates: Partial<AgentConfig>) => void;
   onRemoveAgent: (id: string) => void;
   onSetApiKey: (key: string) => void;
+  onSetAnthropicKey: (key: string) => void;
   onExport: () => string;
   onImport: (json: string) => boolean;
 }
@@ -125,10 +127,12 @@ function AgentForm({
 export default function SettingsPanel({
   agents,
   apiKey,
+  anthropicKey,
   onAddAgent,
   onUpdateAgent,
   onRemoveAgent,
   onSetApiKey,
+  onSetAnthropicKey,
   onExport,
   onImport,
 }: SettingsPanelProps) {
@@ -179,7 +183,21 @@ export default function SettingsPanel({
         </SheetHeader>
 
         <div className="mt-6 space-y-6">
-          {/* API Key */}
+          {/* Anthropic API Key */}
+          <div>
+            <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono block mb-2">
+              Anthropic API Key
+            </label>
+            <input
+              type="password"
+              className={inputClass}
+              placeholder="sk-ant-..."
+              value={anthropicKey}
+              onChange={(e) => onSetAnthropicKey(e.target.value)}
+            />
+          </div>
+
+          {/* ElevenLabs API Key */}
           <div>
             <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono block mb-2">
               ElevenLabs API Key

@@ -16,6 +16,7 @@ export interface AgentConfig {
 interface StoreState {
   agents: AgentConfig[];
   apiKey: string;
+  anthropicKey: string;
 }
 
 const STORAGE_KEY = "staff-meeting-config";
@@ -87,10 +88,10 @@ function loadLocalState(): StoreState {
         ...a,
         speakOrder: a.speakOrder ?? i + 1,
       }));
-      return { agents, apiKey: parsed.apiKey || "" };
+      return { agents, apiKey: parsed.apiKey || "", anthropicKey: parsed.anthropicKey || "" };
     }
   } catch {}
-  return { agents: DEFAULT_AGENTS, apiKey: "" };
+  return { agents: DEFAULT_AGENTS, apiKey: "", anthropicKey: "" };
 }
 
 function saveLocal(state: StoreState) {
@@ -112,7 +113,7 @@ async function loadFromCloud(userId: string): Promise<StoreState | null> {
       speakOrder: a.speakOrder ?? i + 1,
     }));
 
-    return { agents, apiKey: (data.api_key as string) || "" };
+    return { agents, apiKey: (data.api_key as string) || "", anthropicKey: (data.anthropic_key as string) || "" };
   } catch {
     return null;
   }
@@ -124,6 +125,7 @@ async function saveToCloud(userId: string, state: StoreState) {
       user_id: userId,
       agents: state.agents,
       api_key: state.apiKey,
+      anthropic_key: state.anthropicKey,
       updated_at: new Date().toISOString(),
     });
   } catch (err) {
@@ -183,6 +185,10 @@ export function useAgentStore(userId: string | null) {
     setState((s) => ({ ...s, apiKey }));
   }, []);
 
+  const setAnthropicKey = useCallback((anthropicKey: string) => {
+    setState((s) => ({ ...s, anthropicKey }));
+  }, []);
+
   const exportConfig = useCallback(() => {
     return JSON.stringify(state, null, 2);
   }, [state]);
@@ -197,6 +203,7 @@ export function useAgentStore(userId: string | null) {
             speakOrder: a.speakOrder ?? i + 1,
           })),
           apiKey: parsed.apiKey || state.apiKey,
+          anthropicKey: parsed.anthropicKey || state.anthropicKey,
         });
         return true;
       }
@@ -209,11 +216,13 @@ export function useAgentStore(userId: string | null) {
   return {
     agents: sortedAgents,
     apiKey: state.apiKey,
+    anthropicKey: state.anthropicKey,
     setAgents,
     addAgent,
     updateAgent,
     removeAgent,
     setApiKey,
+    setAnthropicKey,
     exportConfig,
     importConfig,
   };
