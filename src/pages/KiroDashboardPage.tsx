@@ -1,11 +1,12 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { lazy, Suspense, useMemo } from 'react';
+import { lazy, Suspense, useMemo, useState, useEffect } from 'react';
 import { useAgent } from '@/hooks/useAgent';
 import { useDashboardConfig } from '@/hooks/useDashboardConfig';
 import { useWidgetData } from '@/hooks/useWidgetData';
 import { WidgetFactory } from '@/components/WidgetFactory';
 import type { LayoutConfigItem } from '@/types/kiro';
 import { ArrowLeft } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 // Role-specific widget sets — lazy loaded by agent name
 const ROLE_WIDGETS: Record<string, React.LazyExoticComponent<React.ComponentType>> = {
@@ -48,9 +49,28 @@ export default function KiroDashboardPage() {
     return config.layout_config as unknown as LayoutConfigItem[];
   }, [config]);
 
-  // Resolve role-specific widget set — try Supabase agent first, fall back to URL param
-  const roleKey = agent
-    ? resolveWidgetKey(agent)
+  // Look up agent from app_config when not found in agents table
+  const [appConfigAgent, setAppConfigAgent] = useState<{ name: string; role: string } | null>(null);
+  useEffect(() => {
+    if (agent || !agentId) return;
+    async function lookupFromConfig() {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session?.user) return;
+      const { data } = await supabase.from('app_config').select('agents').eq('user_id', session.session.user.id).single();
+      if (data?.agents && Array.isArray(data.agents)) {
+        const found = (data.agents as Array<{ id: string; name: string; role: string }>).find(
+          a => a.id === agentId || a.id.toLowerCase() === agentId.toLowerCase()
+        );
+        if (found) setAppConfigAgent({ name: found.name, role: found.role });
+      }
+    }
+    lookupFromConfig();
+  }, [agent, agentId]);
+
+  // Resolve role-specific widget set
+  const resolvedAgent = agent || appConfigAgent;
+  const roleKey = resolvedAgent
+    ? resolveWidgetKey(resolvedAgent)
     : (agentId && ROLE_WIDGETS[agentId.toLowerCase()]) ? agentId.toLowerCase() : null;
   const RoleWidgets = roleKey ? ROLE_WIDGETS[roleKey] : null;
 
@@ -64,8 +84,8 @@ export default function KiroDashboardPage() {
     warbler: { name: 'Kiro', role: 'Cloud Orchestrator' },
   };
 
-  // Try fallback by name key first, then search app_config agents by UUID
   const displayAgent = agent
+    || appConfigAgent
     || (agentId && FALLBACK_AGENTS[agentId.toLowerCase()])
     || null;
 
