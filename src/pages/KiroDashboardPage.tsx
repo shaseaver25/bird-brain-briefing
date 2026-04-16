@@ -1,11 +1,34 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useMemo } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import { useAgent } from '@/hooks/useAgent';
 import { useDashboardConfig } from '@/hooks/useDashboardConfig';
 import { useWidgetData } from '@/hooks/useWidgetData';
 import { WidgetFactory } from '@/components/WidgetFactory';
 import type { LayoutConfigItem } from '@/types/kiro';
 import { ArrowLeft } from 'lucide-react';
+
+// Role-specific widget sets — lazy loaded by agent name
+const ROLE_WIDGETS: Record<string, React.LazyExoticComponent<React.ComponentType>> = {
+  wren: lazy(() => import('@/components/agent-dashboards/WrenWidgets')),
+  saleshawk: lazy(() => import('@/components/agent-dashboards/SalesHawkWidgets')),
+  osprey: lazy(() => import('@/components/agent-dashboards/OspreyWidgets')),
+  merlin: lazy(() => import('@/components/agent-dashboards/MerlinWidgets')),
+  kiro: lazy(() => import('@/components/agent-dashboards/KiroWidgets')),
+  warbler: lazy(() => import('@/components/agent-dashboards/KiroWidgets')),
+};
+
+function resolveWidgetKey(agent: { name: string; role: string }): string | null {
+  const name = agent.name.toLowerCase();
+  if (ROLE_WIDGETS[name]) return name;
+  // Fallback: match by role keywords
+  const role = agent.role.toLowerCase();
+  if (role.includes('strategy')) return 'wren';
+  if (role.includes('sales')) return 'saleshawk';
+  if (role.includes('architect')) return 'osprey';
+  if (role.includes('project') || role.includes('tracker')) return 'merlin';
+  if (role.includes('cloud') || role.includes('orchestrat')) return 'kiro';
+  return null;
+}
 
 export default function KiroDashboardPage() {
   const { agentId } = useParams<{ agentId: string }>();
@@ -24,6 +47,10 @@ export default function KiroDashboardPage() {
     if (!config?.layout_config) return [];
     return config.layout_config as unknown as LayoutConfigItem[];
   }, [config]);
+
+  // Resolve role-specific widget set
+  const roleKey = agent ? resolveWidgetKey(agent) : null;
+  const RoleWidgets = roleKey ? ROLE_WIDGETS[roleKey] : null;
 
   if (agentLoading || configLoading) {
     return (
@@ -68,43 +95,57 @@ export default function KiroDashboardPage() {
         )}
       </header>
 
-      {/* Dashboard Grid */}
-      <main className="p-6">
-        {layout.length === 0 ? (
+      {/* Dashboard Content */}
+      <main className="p-6 max-w-6xl mx-auto">
+        {/* Role-specific widgets (always shown if available) */}
+        {RoleWidgets && (
+          <Suspense fallback={<div className="animate-pulse text-muted-foreground text-center py-12">Loading widgets…</div>}>
+            <RoleWidgets />
+          </Suspense>
+        )}
+
+        {/* Supabase-configured widget grid (shown below role widgets if configured) */}
+        {layout.length > 0 && (
+          <div className={RoleWidgets ? "mt-8 pt-8 border-t border-border" : ""}>
+            {RoleWidgets && (
+              <h2 className="text-sm font-mono font-semibold text-muted-foreground uppercase tracking-wider mb-4">Custom Widgets</h2>
+            )}
+            <div
+              className="grid gap-4"
+              style={{ gridTemplateColumns: 'repeat(12, 1fr)' }}
+            >
+              {layout.map((item) => {
+                const wd = widgetData[item.widget_key];
+                const isStale = wd?.expires_at ? new Date(wd.expires_at) < new Date() : false;
+
+                return (
+                  <div
+                    key={item.widget_key}
+                    className="bg-card border rounded-xl overflow-hidden shadow-sm"
+                    style={{
+                      gridColumn: `${item.col} / span ${item.col_span}`,
+                      gridRow: item.row_span ? `${item.row} / span ${item.row_span}` : `${item.row}`,
+                    }}
+                  >
+                    <WidgetFactory
+                      type={item.type}
+                      data={wd?.data ?? null}
+                      isLoading={dataLoading}
+                      isStale={isStale}
+                      widgetKey={item.widget_key}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Fallback when no widgets at all */}
+        {!RoleWidgets && layout.length === 0 && (
           <div className="text-center py-20 text-muted-foreground">
             <p className="text-lg">No dashboard configured</p>
             <p className="text-sm mt-1">This agent doesn't have a published dashboard yet.</p>
-          </div>
-        ) : (
-          <div
-            className="grid gap-4"
-            style={{
-              gridTemplateColumns: 'repeat(12, 1fr)',
-            }}
-          >
-            {layout.map((item) => {
-              const wd = widgetData[item.widget_key];
-              const isStale = wd?.expires_at ? new Date(wd.expires_at) < new Date() : false;
-
-              return (
-                <div
-                  key={item.widget_key}
-                  className="bg-card border rounded-xl overflow-hidden shadow-sm"
-                  style={{
-                    gridColumn: `${item.col} / span ${item.col_span}`,
-                    gridRow: item.row_span ? `${item.row} / span ${item.row_span}` : `${item.row}`,
-                  }}
-                >
-                  <WidgetFactory
-                    type={item.type}
-                    data={wd?.data ?? null}
-                    isLoading={dataLoading}
-                    isStale={isStale}
-                    widgetKey={item.widget_key}
-                  />
-                </div>
-              );
-            })}
           </div>
         )}
       </main>
