@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { DollarSign, TrendingUp, Users, Clock, AlertCircle, Target, Zap, RefreshCw, Linkedin, ExternalLink } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { DollarSign, TrendingUp, Users, Clock, AlertCircle, Target, Zap, RefreshCw, Linkedin, Mail, Copy, Check, Send, ChevronDown, ChevronUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 // --- Types ---
@@ -130,6 +131,130 @@ function useTodaysFinds() {
   return { data, loading, running, lastUpdated, runNow };
 }
 
+// --- Lead Card with Draft Email ---
+
+function LeadCard({ lead, business }: { lead: DailyFind; business: string }) {
+  const [drafting, setDrafting] = useState(false);
+  const [draft, setDraft] = useState<{ subject: string; body: string } | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function handleDraft() {
+    setDrafting(true);
+    setDraftError(null);
+    setExpanded(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("saleshawk-draft", {
+        body: { lead, business },
+      });
+      if (error) throw error;
+      if (!data?.draft) throw new Error("No draft returned");
+      setDraft(data.draft);
+    } catch (err) {
+      setDraftError(String(err));
+    } finally {
+      setDrafting(false);
+    }
+  }
+
+  function handleCopy() {
+    if (!draft) return;
+    const text = `Subject: ${draft.subject}\n\n${draft.body}`;
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  function handleGmail() {
+    if (!draft) return;
+    const to = lead.email ?? "";
+    const subject = encodeURIComponent(draft.subject);
+    const body = encodeURIComponent(draft.body);
+    window.open(`https://mail.google.com/mail/?view=cm&to=${to}&su=${subject}&body=${body}`, "_blank");
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-card overflow-hidden">
+      {/* Lead info row */}
+      <div className="flex items-start gap-3 p-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-medium">{lead.name}</p>
+            {lead.email && <Badge variant="outline" className="text-[10px] text-emerald-600">email found</Badge>}
+          </div>
+          <p className="text-xs text-muted-foreground">{lead.title}{lead.title && lead.company ? " · " : ""}{lead.company}</p>
+          {lead.notes && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{lead.notes}</p>}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {lead.linkedin_url && (
+            <a href={lead.linkedin_url} target="_blank" rel="noopener noreferrer"
+              className="text-muted-foreground hover:text-blue-500 transition-colors">
+              <Linkedin className="h-4 w-4" />
+            </a>
+          )}
+          <div className="text-right mr-1">
+            <p className="text-sm font-bold font-mono text-emerald-600">{lead.score}</p>
+            <p className="text-[10px] text-muted-foreground">score</p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs gap-1"
+            onClick={draft ? () => setExpanded(!expanded) : handleDraft}
+            disabled={drafting}
+          >
+            {drafting ? (
+              <><RefreshCw className="h-3 w-3 animate-spin" /> Drafting…</>
+            ) : draft ? (
+              expanded ? <><ChevronUp className="h-3 w-3" /> Hide</> : <><ChevronDown className="h-3 w-3" /> Draft</>
+            ) : (
+              <><Mail className="h-3 w-3" /> Draft</>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {/* Draft panel */}
+      {expanded && (
+        <div className="border-t border-border bg-muted/30 p-3 space-y-2">
+          {draftError ? (
+            <p className="text-xs text-destructive">{draftError}</p>
+          ) : draft ? (
+            <>
+              <div>
+                <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1">Subject</p>
+                <p className="text-sm font-medium">{draft.subject}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-1">Body</p>
+                <p className="text-sm whitespace-pre-line leading-relaxed">{draft.body}</p>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleCopy}>
+                  {copied ? <><Check className="h-3 w-3 text-emerald-500" /> Copied</> : <><Copy className="h-3 w-3" /> Copy</>}
+                </Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleGmail}>
+                  <Send className="h-3 w-3" /> Open in Gmail
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs ml-auto text-muted-foreground"
+                  onClick={handleDraft}>
+                  <RefreshCw className="h-3 w-3" /> Regenerate
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center gap-2 py-2">
+              <RefreshCw className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">Writing personalized email…</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // --- Today's Finds Widget ---
 
 function TodaysFindsWidget() {
@@ -209,36 +334,7 @@ function TodaysFindsWidget() {
                   </p>
                   <div className="space-y-2">
                     {leads.map((lead) => (
-                      <div key={`${lead.name}-${lead.company}`} className="flex items-start gap-3 p-3 rounded-lg border border-border bg-card">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-sm font-medium">{lead.name}</p>
-                            {lead.email && (
-                              <Badge variant="outline" className="text-[10px] text-emerald-600">email found</Badge>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground">{lead.title} · {lead.company}</p>
-                          {lead.notes && (
-                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{lead.notes}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {lead.linkedin_url && (
-                            <a
-                              href={lead.linkedin_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-muted-foreground hover:text-blue-500 transition-colors"
-                            >
-                              <Linkedin className="h-4 w-4" />
-                            </a>
-                          )}
-                          <div className="text-right">
-                            <p className="text-sm font-bold font-mono text-emerald-600">{lead.score}</p>
-                            <p className="text-[10px] text-muted-foreground">score</p>
-                          </div>
-                        </div>
-                      </div>
+                      <LeadCard key={`${lead.name}-${lead.company}`} lead={lead} business={biz} />
                     ))}
                   </div>
                 </div>
