@@ -26,14 +26,16 @@ async function getGoogleAccessToken(clientId: string, clientSecret: string, refr
 }
 
 // Format a Google Calendar start/end into display strings
+const TZ = "America/Chicago";
+
 function formatCalendarItem(event: Record<string, unknown>): { date: string; time: string; title: string; type: "meeting" | "deadline" } {
   const start = event.start as Record<string, string>;
   const summary = (event.summary as string) || "(No title)";
   const dt = start.dateTime ? new Date(start.dateTime) : new Date(start.date as string);
   const isAllDay = !start.dateTime;
 
-  const date = dt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  const time = isAllDay ? "All day" : dt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const date = dt.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: isAllDay ? "UTC" : TZ });
+  const time = isAllDay ? "All day" : dt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: TZ });
 
   // Heuristic: "deadline" if all-day or title contains deadline keywords
   const lc = summary.toLowerCase();
@@ -109,7 +111,7 @@ async function fetchGmailFlagged(accessToken: string, maxResults = 8): Promise<u
     const from = getHeader(headers, "From");
     const subject = getHeader(headers, "Subject");
     const internalDate = msg.internalDate ?? "0";
-    const receivedAt = new Date(parseInt(internalDate)).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const receivedAt = new Date(parseInt(internalDate)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: TZ });
 
     return {
       from: parseSenderName(from),
