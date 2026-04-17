@@ -363,15 +363,7 @@ export type Database = {
           updated_at?: string
           version?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "dashboard_configs_agent_id_fkey"
-            columns: ["agent_id"]
-            isOneToOne: true
-            referencedRelation: "agents"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       mcp_tools: {
         Row: {
@@ -487,15 +479,7 @@ export type Database = {
           updated_at?: string
           widget_key?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "widget_data_agent_id_fkey"
-            columns: ["agent_id"]
-            isOneToOne: false
-            referencedRelation: "agents"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Views: {
