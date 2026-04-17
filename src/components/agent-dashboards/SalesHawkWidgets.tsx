@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -64,8 +64,9 @@ function useTodaysFinds() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  async function loadCached() {
+  async function loadCached(): Promise<Date | null> {
     const { data: row } = await supabase
       .from("widget_data")
       .select("data, updated_at")
@@ -75,28 +76,53 @@ function useTodaysFinds() {
 
     if (row?.data) {
       setData(row.data as unknown as TodaysFindsData);
-      if (row.updated_at) setLastUpdated(new Date(row.updated_at));
-      return true;
+      const ts = row.updated_at ? new Date(row.updated_at) : null;
+      if (ts) setLastUpdated(ts);
+      return ts;
     }
-    return false;
+    return null;
+  }
+
+  function stopPolling() {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
   }
 
   async function runNow() {
     setRunning(true);
+    stopPolling();
+
+    // Snapshot the current updated_at so we know when new data arrives
+    const prevUpdatedAt = lastUpdated?.toISOString() ?? null;
+
     try {
-      const { data: result, error } = await supabase.functions.invoke("saleshawk-daily");
+      const { error } = await supabase.functions.invoke("saleshawk-daily");
       if (error) throw error;
-      // Reload from widget_data after run completes
-      await loadCached();
+
+      // Fire-and-forget returns 202 immediately — poll every 15s until
+      // widget_data has a newer timestamp (job typically takes 2-3 min)
+      let attempts = 0;
+      const MAX_ATTEMPTS = 20; // 5 minutes max
+      pollRef.current = setInterval(async () => {
+        attempts++;
+        const newTs = await loadCached();
+        const hasNewData = newTs && newTs.toISOString() !== prevUpdatedAt;
+        if (hasNewData || attempts >= MAX_ATTEMPTS) {
+          stopPolling();
+          setRunning(false);
+        }
+      }, 15000);
     } catch (err) {
       console.error("saleshawk-daily failed:", err);
-    } finally {
       setRunning(false);
     }
   }
 
   useEffect(() => {
     loadCached().finally(() => setLoading(false));
+    return () => stopPolling();
   }, []);
 
   return { data, loading, running, lastUpdated, runNow };
