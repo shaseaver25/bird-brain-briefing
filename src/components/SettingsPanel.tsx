@@ -7,11 +7,13 @@ interface SettingsPanelProps {
   agents: AgentConfig[];
   apiKey: string;
   anthropicKey: string;
+  useMcpBackend: boolean;
   onAddAgent: (agent: Omit<AgentConfig, "id">) => void;
   onUpdateAgent: (id: string, updates: Partial<AgentConfig>) => void;
   onRemoveAgent: (id: string) => void;
   onSetApiKey: (key: string) => void;
   onSetAnthropicKey: (key: string) => void;
+  onSetUseMcpBackend: (enabled: boolean) => void;
   onExport: () => string;
   onImport: (json: string) => boolean;
 }
@@ -128,11 +130,13 @@ export default function SettingsPanel({
   agents,
   apiKey,
   anthropicKey,
+  useMcpBackend,
   onAddAgent,
   onUpdateAgent,
   onRemoveAgent,
   onSetApiKey,
   onSetAnthropicKey,
+  onSetUseMcpBackend,
   onExport,
   onImport,
 }: SettingsPanelProps) {
@@ -195,6 +199,39 @@ export default function SettingsPanel({
               value={anthropicKey}
               onChange={(e) => onSetAnthropicKey(e.target.value)}
             />
+          </div>
+
+          {/* MCP Backend Toggle */}
+          <div>
+            <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono block mb-2">
+              Backend Mode
+            </label>
+            <button
+              onClick={() => onSetUseMcpBackend(!useMcpBackend)}
+              className={`flex items-center gap-3 w-full rounded-md border px-3 py-2.5 text-sm transition-colors ${
+                useMcpBackend
+                  ? "border-primary bg-primary/10 text-foreground"
+                  : "border-border bg-secondary text-muted-foreground"
+              }`}
+            >
+              <span
+                className={`w-8 h-4 rounded-full relative flex-shrink-0 transition-colors ${
+                  useMcpBackend ? "bg-primary" : "bg-muted-foreground/30"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${
+                    useMcpBackend ? "translate-x-4" : "translate-x-0.5"
+                  }`}
+                />
+              </span>
+              <span className="font-mono">
+                {useMcpBackend ? "Claude API (MCP)" : "Legacy (OpenClaw)"}
+              </span>
+            </button>
+            {useMcpBackend && !anthropicKey && (
+              <p className="text-xs text-amber-500 mt-1.5">Add your Anthropic key above to use MCP mode.</p>
+            )}
           </div>
 
           {/* ElevenLabs API Key */}

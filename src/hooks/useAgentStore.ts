@@ -17,6 +17,7 @@ interface StoreState {
   agents: AgentConfig[];
   apiKey: string;
   anthropicKey: string;
+  useMcpBackend: boolean;
 }
 
 const STORAGE_KEY = "staff-meeting-config";
@@ -88,10 +89,10 @@ function loadLocalState(): StoreState {
         ...a,
         speakOrder: a.speakOrder ?? i + 1,
       }));
-      return { agents, apiKey: parsed.apiKey || "", anthropicKey: parsed.anthropicKey || "" };
+      return { agents, apiKey: parsed.apiKey || "", anthropicKey: parsed.anthropicKey || "", useMcpBackend: parsed.useMcpBackend ?? false };
     }
   } catch {}
-  return { agents: DEFAULT_AGENTS, apiKey: "", anthropicKey: "" };
+  return { agents: DEFAULT_AGENTS, apiKey: "", anthropicKey: "", useMcpBackend: false };
 }
 
 function saveLocal(state: StoreState) {
@@ -102,7 +103,7 @@ async function loadFromCloud(userId: string): Promise<StoreState | null> {
   try {
     const { data, error } = await supabase
       .from("app_config")
-      .select("agents, api_key, anthropic_key")
+      .select("agents, api_key, anthropic_key, use_mcp_backend")
       .eq("user_id", userId)
       .maybeSingle();
 
@@ -113,7 +114,7 @@ async function loadFromCloud(userId: string): Promise<StoreState | null> {
       speakOrder: a.speakOrder ?? i + 1,
     }));
 
-    return { agents, apiKey: (data.api_key as string) || "", anthropicKey: (data.anthropic_key as string) || "" };
+    return { agents, apiKey: (data.api_key as string) || "", anthropicKey: (data.anthropic_key as string) || "", useMcpBackend: (data as any).use_mcp_backend ?? false };
   } catch {
     return null;
   }
@@ -126,6 +127,7 @@ async function saveToCloud(userId: string, state: StoreState) {
       agents: state.agents,
       api_key: state.apiKey,
       anthropic_key: state.anthropicKey,
+      use_mcp_backend: state.useMcpBackend,
       updated_at: new Date().toISOString(),
     });
   } catch (err) {
@@ -189,6 +191,10 @@ export function useAgentStore(userId: string | null) {
     setState((s) => ({ ...s, anthropicKey }));
   }, []);
 
+  const setUseMcpBackend = useCallback((useMcpBackend: boolean) => {
+    setState((s) => ({ ...s, useMcpBackend }));
+  }, []);
+
   const exportConfig = useCallback(() => {
     return JSON.stringify(state, null, 2);
   }, [state]);
@@ -204,6 +210,7 @@ export function useAgentStore(userId: string | null) {
           })),
           apiKey: parsed.apiKey || state.apiKey,
           anthropicKey: parsed.anthropicKey || state.anthropicKey,
+          useMcpBackend: parsed.useMcpBackend ?? state.useMcpBackend,
         });
         return true;
       }
@@ -217,12 +224,14 @@ export function useAgentStore(userId: string | null) {
     agents: sortedAgents,
     apiKey: state.apiKey,
     anthropicKey: state.anthropicKey,
+    useMcpBackend: state.useMcpBackend,
     setAgents,
     addAgent,
     updateAgent,
     removeAgent,
     setApiKey,
     setAnthropicKey,
+    setUseMcpBackend,
     exportConfig,
     importConfig,
   };

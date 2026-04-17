@@ -5,7 +5,7 @@ import AgentPanel, { AgentPanelHandle } from "@/components/AgentPanel";
 import SettingsPanel from "@/components/SettingsPanel";
 import { useAgentStore } from "@/hooks/useAgentStore";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
-import { resetSession } from "@/lib/agent-api";
+import { resetSession, clearBackendModeCache } from "@/lib/agent-api";
 import { supabase } from "@/integrations/supabase/client";
 
 interface IndexProps {
@@ -189,11 +189,16 @@ export default function Index({ userId }: IndexProps) {
               agents={store.agents}
               apiKey={store.apiKey}
               anthropicKey={store.anthropicKey}
+              useMcpBackend={store.useMcpBackend}
               onAddAgent={store.addAgent}
               onUpdateAgent={store.updateAgent}
               onRemoveAgent={store.removeAgent}
               onSetApiKey={store.setApiKey}
               onSetAnthropicKey={store.setAnthropicKey}
+              onSetUseMcpBackend={(enabled) => {
+                store.setUseMcpBackend(enabled);
+                clearBackendModeCache();
+              }}
               onExport={store.exportConfig}
               onImport={store.importConfig}
             />
