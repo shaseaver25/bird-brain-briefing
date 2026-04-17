@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -6,19 +7,27 @@ import { Button } from "@/components/ui/button";
 import {
   Calendar, CheckSquare, Mail, FileText, Share2, Clock,
   BarChart3, Layout, ThumbsUp, ThumbsDown, Linkedin, Twitter,
-  Globe, Eye, Heart, MessageSquare, Repeat2, TrendingUp,
+  Globe, Eye, Heart, MessageSquare, Repeat2, TrendingUp, RefreshCw,
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
-// --- Mock Data ---
+// --- Types ---
 
-const CALENDAR_ITEMS = [
-  { date: "Apr 16", time: "10:00 AM", title: "Juliet Fox — AvidEdge check-in", type: "meeting" as const },
-  { date: "Apr 16", time: "1:00 PM", title: "Content review session", type: "meeting" as const },
-  { date: "Apr 16", time: "3:30 PM", title: "Team sync (all agents)", type: "meeting" as const },
-  { date: "Apr 17", time: "9:00 AM", title: "TailoredU prospect call — UMN Extension", type: "meeting" as const },
-  { date: "Apr 17", time: "EOD", title: "Conference Stripe webhooks deadline", type: "deadline" as const },
-  { date: "Apr 18", time: "EOD", title: "Co-Lab landing page copy due", type: "deadline" as const },
-];
+interface CalendarItem {
+  date: string;
+  time: string;
+  title: string;
+  type: "meeting" | "deadline";
+}
+
+interface EmailItem {
+  from: string;
+  subject: string;
+  flagReason: string;
+  receivedAt: string;
+}
+
+// --- Static Mock Data (non-Google widgets) ---
 
 const PENDING_TASKS = [
   { title: "Review SalesHawk's UMN proposal draft", priority: "high" as const, assignee: "Shannon", dueDate: "Today" },
@@ -26,12 +35,6 @@ const PENDING_TASKS = [
   { title: "Send Juliet agenda for AvidEdge meeting", priority: "high" as const, assignee: "Wren", dueDate: "Today" },
   { title: "Schedule Co-Lab brainstorm session", priority: "low" as const, assignee: "Wren", dueDate: "Apr 18" },
   { title: "Draft thank-you email for Cancer Society donation", priority: "medium" as const, assignee: "Wren", dueDate: "Apr 17" },
-];
-
-const FLAGGED_EMAILS = [
-  { from: "Cancer Society", subject: "Re: AI Workshop Proposal", flagReason: "No reply in 6 days", receivedAt: "Apr 10" },
-  { from: "Metro Transit HR", subject: "Training budget approval", flagReason: "Needs response", receivedAt: "Apr 14" },
-  { from: "Juliet Fox", subject: "Quick question on candidate fields", flagReason: "Blocks AvidEdge spec", receivedAt: "Apr 13" },
 ];
 
 const DRAFTS = [
@@ -105,34 +108,197 @@ const CALENDAR_STATUS_STYLES: Record<string, { label: string; variant: "default"
   idea: { label: "Idea", variant: "outline" },
 };
 
-// --- Widgets ---
+// --- Live data hook ---
 
-function CalendarOverviewWidget() {
+function useLiveWrenData() {
+  const [calendarItems, setCalendarItems] = useState<CalendarItem[] | null>(null);
+  const [emailItems, setEmailItems] = useState<EmailItem[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  async function loadCachedData() {
+    const { data } = await supabase
+      .from("widget_data")
+      .select("widget_key, data, expires_at, updated_at")
+      .eq("agent_id", "wren")
+      .in("widget_key", ["calendar_overview", "flagged_emails"]);
+
+    if (data?.length) {
+      for (const row of data) {
+        if (row.widget_key === "calendar_overview") {
+          const d = row.data as { items?: CalendarItem[] };
+          if (d?.items) setCalendarItems(d.items);
+        }
+        if (row.widget_key === "flagged_emails") {
+          const d = row.data as { emails?: EmailItem[] };
+          if (d?.emails) setEmailItems(d.emails);
+        }
+        if (row.updated_at) setLastUpdated(new Date(row.updated_at));
+      }
+      return true;
+    }
+    return false;
+  }
+
+  async function refresh() {
+    setRefreshing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("refresh-dashboard", {
+        body: { agent_id: "wren" },
+      });
+      if (error) throw error;
+      if (data?.calendar) setCalendarItems(data.calendar);
+      if (data?.emails) setEmailItems(data.emails);
+      setLastUpdated(new Date());
+    } catch (err) {
+      console.error("refresh-dashboard failed:", err);
+      // Fall back to cached data if refresh fails
+      await loadCachedData();
+    } finally {
+      setRefreshing(false);
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    // Load cached data immediately for instant display, then refresh in background
+    loadCachedData().then((hasCached) => {
+      if (hasCached) setLoading(false);
+      // Always kick off a fresh refresh (runs in background after showing cached)
+      refresh();
+    });
+  }, []);
+
+  return { calendarItems, emailItems, loading, refreshing, lastUpdated, refresh };
+}
+
+// --- Live Widgets ---
+
+function CalendarOverviewWidget({
+  items,
+  loading,
+  refreshing,
+  onRefresh,
+  lastUpdated,
+}: {
+  items: CalendarItem[] | null;
+  loading: boolean;
+  refreshing: boolean;
+  onRefresh: () => void;
+  lastUpdated: Date | null;
+}) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Calendar className="h-5 w-5 text-blue-500" />
-          Calendar Overview
-        </CardTitle>
-        <CardDescription>Next 3 days</CardDescription>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-blue-500" />
+            Calendar Overview
+          </CardTitle>
+          <button
+            onClick={onRefresh}
+            disabled={refreshing}
+            className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+            title="Refresh from Google Calendar"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+          </button>
+        </div>
+        <CardDescription>
+          {loading ? "Loading…" : lastUpdated
+            ? `Updated ${lastUpdated.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
+            : "Next 3 days"}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
-        {CALENDAR_ITEMS.map((item) => (
-          <div key={`${item.date}-${item.title}`} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
-            <div className="w-16 text-right shrink-0">
-              <p className="text-xs font-mono text-muted-foreground">{item.date}</p>
-              <p className="text-xs font-mono font-medium">{item.time}</p>
-            </div>
-            <div className={`w-1 h-8 rounded-full ${item.type === "meeting" ? "bg-blue-500" : "bg-red-500"}`} />
-            <p className="text-sm flex-1">{item.title}</p>
-            <Badge variant="outline" className="text-[10px]">{item.type}</Badge>
+        {loading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-10 rounded bg-muted animate-pulse" />
+            ))}
           </div>
-        ))}
+        ) : !items?.length ? (
+          <p className="text-sm text-muted-foreground text-center py-4">No upcoming events</p>
+        ) : (
+          items.map((item) => (
+            <div key={`${item.date}-${item.title}`} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
+              <div className="w-16 text-right shrink-0">
+                <p className="text-xs font-mono text-muted-foreground">{item.date}</p>
+                <p className="text-xs font-mono font-medium">{item.time}</p>
+              </div>
+              <div className={`w-1 h-8 rounded-full ${item.type === "meeting" ? "bg-blue-500" : "bg-red-500"}`} />
+              <p className="text-sm flex-1">{item.title}</p>
+              <Badge variant="outline" className="text-[10px]">{item.type}</Badge>
+            </div>
+          ))
+        )}
       </CardContent>
     </Card>
   );
 }
+
+function FlaggedEmailsWidget({
+  emails,
+  loading,
+  refreshing,
+  onRefresh,
+}: {
+  emails: EmailItem[] | null;
+  loading: boolean;
+  refreshing: boolean;
+  onRefresh: () => void;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Mail className="h-5 w-5 text-red-500" />
+            Flagged Emails
+          </CardTitle>
+          <button
+            onClick={onRefresh}
+            disabled={refreshing}
+            className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+            title="Refresh from Gmail"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+          </button>
+        </div>
+        <CardDescription>
+          {loading ? "Loading…" : emails?.length ? `${emails.length} need attention` : "All clear"}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {loading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-16 rounded bg-muted animate-pulse" />
+            ))}
+          </div>
+        ) : !emails?.length ? (
+          <p className="text-sm text-muted-foreground text-center py-4">Inbox is clear</p>
+        ) : (
+          emails.map((email) => (
+            <div key={email.subject} className="p-3 rounded-md bg-red-500/5 border border-red-500/20">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium">{email.from}</p>
+                  <p className="text-xs text-muted-foreground">{email.subject}</p>
+                </div>
+                <span className="text-[10px] text-muted-foreground shrink-0">{email.receivedAt}</span>
+              </div>
+              <p className="text-xs text-red-500 mt-1">{email.flagReason}</p>
+            </div>
+          ))
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// --- Static Widgets (unchanged) ---
 
 function PendingTasksWidget() {
   return (
@@ -155,34 +321,6 @@ function PendingTasksWidget() {
               <p className="text-xs text-muted-foreground">{task.assignee}</p>
             </div>
             <Badge variant="outline" className="text-[10px]">{task.dueDate}</Badge>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
-
-function FlaggedEmailsWidget() {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Mail className="h-5 w-5 text-red-500" />
-          Flagged Emails
-        </CardTitle>
-        <CardDescription>{FLAGGED_EMAILS.length} need attention</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {FLAGGED_EMAILS.map((email) => (
-          <div key={email.subject} className="p-3 rounded-md bg-red-500/5 border border-red-500/20">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-sm font-medium">{email.from}</p>
-                <p className="text-xs text-muted-foreground">{email.subject}</p>
-              </div>
-              <span className="text-[10px] text-muted-foreground shrink-0">{email.receivedAt}</span>
-            </div>
-            <p className="text-xs text-red-500 mt-1">{email.flagReason}</p>
           </div>
         ))}
       </CardContent>
@@ -373,13 +511,26 @@ function ContentCalendarWidget() {
 }
 
 export default function WrenWidgets() {
+  const { calendarItems, emailItems, loading, refreshing, lastUpdated, refresh } = useLiveWrenData();
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <CalendarOverviewWidget />
+        <CalendarOverviewWidget
+          items={calendarItems}
+          loading={loading}
+          refreshing={refreshing}
+          onRefresh={refresh}
+          lastUpdated={lastUpdated}
+        />
         <PendingTasksWidget />
       </div>
-      <FlaggedEmailsWidget />
+      <FlaggedEmailsWidget
+        emails={emailItems}
+        loading={loading}
+        refreshing={refreshing}
+        onRefresh={refresh}
+      />
       <DraftsApprovalWidget />
       <PlatformVariantsWidget />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
