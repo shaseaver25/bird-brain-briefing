@@ -171,11 +171,15 @@ function TodaysFindsWidget() {
             </button>
           </div>
         </div>
-        <CardDescription>
-          {loading ? "Loading…" : running ? "SalesHawk is prospecting…" : data
-            ? <span>{finds.length} leads added{data.date ? ` — ${data.date}` : ""}{lastRunTime ? <span className="ml-2 text-emerald-600 font-mono">Last run: {lastRunTime} CT</span> : null}{errors.length > 0 ? <span className="ml-2 text-destructive">{errors.length} failed</span> : null}</span>
-            : "No run yet today — click Run Now"}
-        </CardDescription>
+        <div className="text-sm text-muted-foreground">
+          {loading ? "Loading…" : running ? "SalesHawk is prospecting…" : data ? (
+            <span>
+              {finds.length} leads added{data.date ? ` — ${data.date}` : ""}
+              {lastRunTime ? <span className="ml-2 text-emerald-600 font-mono">Last run: {lastRunTime} CT</span> : null}
+              {errors.length > 0 ? <span className="ml-2 text-destructive">{errors.length} failed</span> : null}
+            </span>
+          ) : "No run yet today — click Run Now"}
+        </div>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -359,9 +363,9 @@ export default function SalesHawkWidgets() {
   return (
     <div className="space-y-6">
       <TodaysFindsWidget />
-      <DealValuesWidget />
-      <PipelineFunnelWidget />
-      <FollowUpQueueWidget />
+      {/* Deal Values, Pipeline Funnel, and Follow-Up Queue are hidden until
+          they're wired to real CRM data. See DealValuesWidget, PipelineFunnelWidget,
+          FollowUpQueueWidget above — kept in the file for future re-enablement. */}
     </div>
   );
 }
