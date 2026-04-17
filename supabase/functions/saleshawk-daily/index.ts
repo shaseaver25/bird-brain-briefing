@@ -127,7 +127,7 @@ Return a JSON array only:
   }
 ]`,
     }],
-  });
+  } as any);
 
   let jsonText = "";
   for (const block of response.content) {
