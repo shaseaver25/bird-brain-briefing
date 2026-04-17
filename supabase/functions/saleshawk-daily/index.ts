@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.20.0";
+import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.32.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -102,7 +102,7 @@ async function researchProspects(icp: string, count: number, business: string): 
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 4096,
-    tools: [{ type: "web_search_20250305", name: "web_search" } as any],
+    tools: [{ type: "web_search_20250305", name: "web_search" }],
     system: `You are SalesHawk, an elite sales researcher for Shannon Seaver's businesses in Minneapolis. Find real, verifiable people who match the ICP. Use web search to confirm they exist and gather signals. Return ONLY a valid JSON array, no other text.`,
     messages: [{
       role: "user",
@@ -127,7 +127,7 @@ Return a JSON array only:
   }
 ]`,
     }],
-  });
+  } as any);
 
   let jsonText = "";
   for (const block of response.content) {
