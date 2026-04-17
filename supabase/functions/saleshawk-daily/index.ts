@@ -139,126 +139,109 @@ Return a JSON array only:
   return JSON.parse(match[0]) as Prospect[];
 }
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+async function runProspecting(): Promise<void> {
+  const staffMeetingSupabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  );
 
-  try {
-    const staffMeetingSupabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+  const runDate = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const allFinds: Array<{
+    business: string;
+    name: string;
+    title: string;
+    company: string;
+    score: number;
+    linkedin_url: string | null;
+    email: string | null;
+    notes: string;
+    status: string;
+  }> = [];
 
-    const runDate = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-    const allFinds: Array<{
-      business: string;
-      name: string;
-      title: string;
-      company: string;
-      score: number;
-      linkedin_url: string | null;
-      email: string | null;
-      notes: string;
-      status: string;
-    }> = [];
+  for (const run of DAILY_RUNS) {
+    console.log(`Prospecting for ${run.business} (${run.count} leads)...`);
+    try {
+      const prospects = await researchProspects(run.icp, run.count, run.business);
+      const crm = getCrmClient(run.business);
 
-    // Run each business sequentially to avoid rate limits
-    for (const run of DAILY_RUNS) {
-      console.log(`Prospecting for ${run.business} (${run.count} leads)...`);
-
-      try {
-        const prospects = await researchProspects(run.icp, run.count, run.business);
-        const crm = getCrmClient(run.business);
-
-        for (const prospect of prospects) {
-          let email: string | null = null;
-          const domain = prospect.website ? urlToDomain(prospect.website) : null;
-          if (domain) {
-            const { first, last } = splitName(prospect.name);
-            email = await findEmail(first, last, domain);
-          }
-
-          const leadRow = {
-            business: run.business,
-            name: prospect.name,
-            email,
-            company: prospect.company || null,
-            title: prospect.title || null,
-            phone: null,
-            linkedin_url: prospect.linkedin_url || null,
-            source: "ai_agent",
-            notes: prospect.notes || null,
-            score: prospect.score ?? 50,
-            status: "new",
-          };
-
-          const { error } = await crm.from("leads").insert(leadRow);
-
-          allFinds.push({
-            business: run.business,
-            name: prospect.name,
-            title: prospect.title,
-            company: prospect.company,
-            score: prospect.score ?? 50,
-            linkedin_url: prospect.linkedin_url || null,
-            email,
-            notes: prospect.notes || "",
-            status: error ? "error" : "inserted",
-          });
-
-          if (error) console.error(`Failed to insert ${prospect.name}:`, error.message);
-          else console.log(`✓ ${prospect.name} → ${run.business} CRM`);
+      for (const prospect of prospects) {
+        let email: string | null = null;
+        const domain = prospect.website ? urlToDomain(prospect.website) : null;
+        if (domain) {
+          const { first, last } = splitName(prospect.name);
+          email = await findEmail(first, last, domain);
         }
-      } catch (err) {
-        console.error(`Error prospecting for ${run.business}:`, err);
+
+        const leadRow = {
+          business: run.business,
+          name: prospect.name,
+          email,
+          company: prospect.company || null,
+          title: prospect.title || null,
+          phone: null,
+          linkedin_url: prospect.linkedin_url || null,
+          source: "ai_agent",
+          notes: prospect.notes || null,
+          score: prospect.score ?? 50,
+          status: "new",
+        };
+
+        const { error } = await crm.from("leads").insert(leadRow);
+
         allFinds.push({
           business: run.business,
-          name: `Error: ${String(err)}`,
-          title: "",
-          company: "",
-          score: 0,
-          linkedin_url: null,
-          email: null,
-          notes: "",
-          status: "error",
+          name: prospect.name,
+          title: prospect.title,
+          company: prospect.company,
+          score: prospect.score ?? 50,
+          linkedin_url: prospect.linkedin_url || null,
+          email,
+          notes: prospect.notes || "",
+          status: error ? "error" : "inserted",
         });
+
+        if (error) console.error(`Failed to insert ${prospect.name}:`, error.message);
+        else console.log(`✓ ${prospect.name} → ${run.business} CRM`);
       }
+    } catch (err) {
+      console.error(`Error prospecting for ${run.business}:`, err);
+      allFinds.push({
+        business: run.business,
+        name: `Error: ${String(err)}`,
+        title: "",
+        company: "",
+        score: 0,
+        linkedin_url: null,
+        email: null,
+        notes: "",
+        status: "error",
+      });
     }
-
-    // Write today's finds to widget_data so the dashboard can display them
-    const inserted = allFinds.filter((f) => f.status === "inserted");
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // expires in 24h
-
-    await staffMeetingSupabase.from("widget_data").upsert({
-      agent_id: "saleshawk",
-      widget_key: "todays_finds",
-      data: {
-        date: runDate,
-        total: inserted.length,
-        finds: allFinds,
-      },
-      expires_at: expiresAt,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "agent_id,widget_key" });
-
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        date: runDate,
-        total_inserted: inserted.length,
-        by_business: {
-          realpath: inserted.filter((f) => f.business === "realpath").length,
-          tailoredu: inserted.filter((f) => f.business === "tailoredu").length,
-          aiwhisperers: inserted.filter((f) => f.business === "aiwhisperers").length,
-        },
-        finds: allFinds,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  } catch (err) {
-    console.error("saleshawk-daily error:", err);
-    return new Response(
-      JSON.stringify({ error: String(err) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
   }
+
+  const inserted = allFinds.filter((f) => f.status === "inserted");
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+  await staffMeetingSupabase.from("widget_data").upsert({
+    agent_id: "saleshawk",
+    widget_key: "todays_finds",
+    data: { date: runDate, total: inserted.length, finds: allFinds },
+    expires_at: expiresAt,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "agent_id,widget_key" });
+
+  console.log(`saleshawk-daily complete: ${inserted.length} inserted of ${allFinds.length} finds`);
+}
+
+Deno.serve((req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  // Run in background so we don't hit the 150s request timeout
+  // @ts-ignore - EdgeRuntime is provided by Supabase edge runtime
+  EdgeRuntime.waitUntil(runProspecting().catch((err) => console.error("saleshawk-daily background error:", err)));
+
+  return new Response(
+    JSON.stringify({ ok: true, status: "started", message: "Prospecting running in background. Check widget_data in ~2-3 min." }),
+    { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
 });
