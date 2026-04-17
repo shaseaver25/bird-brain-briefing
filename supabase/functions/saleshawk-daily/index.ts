@@ -104,8 +104,8 @@ ${icp}
 Today: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
 
 Search for real people. Verify they exist. Find company websites and LinkedIn profiles.
-You MUST respond with ONLY a JSON array — no prose, no markdown, no explanation.
-Start your response with [ and end with ].
+
+CRITICAL OUTPUT FORMAT: Your final message must contain ONLY a valid JSON array — no prose, no markdown fences, no explanation before or after. Start with [ and end with ]. Example shape:
 
 [
   {
@@ -123,16 +123,14 @@ Start your response with [ and end with ].
     model: "claude-sonnet-4-6",
     max_tokens: 4096,
     tools: [{ type: "web_search_20250305", name: "web_search" }] as any,
-    system: "You are SalesHawk, an elite sales researcher. Use web search to find real people matching the ICP. Always end your final response with a valid JSON array and nothing else.",
+    system: "You are SalesHawk, an elite sales researcher. Use web search to find real people matching the ICP. Your final response MUST be a valid JSON array starting with [ and ending with ]. Output nothing else — no prose, no markdown.",
     messages: [
       { role: "user", content: userPrompt },
-      // Prefill forces Claude to start with [ after tool use completes
-      { role: "assistant", content: "[" },
     ],
   } as any);
 
-  // Reconstruct full JSON: prepend the "[" prefill to Claude's continuation
-  let jsonText = "[";
+  // Collect all text blocks from Claude's response
+  let jsonText = "";
   for (const block of response.content) {
     if (block.type === "text") jsonText += block.text;
   }
