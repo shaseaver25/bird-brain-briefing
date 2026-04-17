@@ -16,11 +16,13 @@ interface DailyFind {
   linkedin_url: string | null;
   email: string | null;
   notes: string;
-  status: string;
+  status: "inserted" | "error";
+  error?: string;
 }
 
 interface TodaysFindsData {
   date: string;
+  run_time?: string;
   total: number;
   finds: DailyFind[];
 }
@@ -134,11 +136,15 @@ function TodaysFindsWidget() {
   const { data, loading, running, lastUpdated, runNow } = useTodaysFinds();
 
   const finds = data?.finds?.filter((f) => f.status === "inserted") ?? [];
+  const errors = data?.finds?.filter((f) => f.status === "error") ?? [];
   const byBusiness = {
     realpath: finds.filter((f) => f.business === "realpath"),
     tailoredu: finds.filter((f) => f.business === "tailoredu"),
     aiwhisperers: finds.filter((f) => f.business === "aiwhisperers"),
   };
+  const lastRunTime = data?.run_time
+    ? new Date(data.run_time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" })
+    : lastUpdated?.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }) ?? null;
 
   return (
     <Card className="border-emerald-500/30">
@@ -167,7 +173,7 @@ function TodaysFindsWidget() {
         </div>
         <CardDescription>
           {loading ? "Loading…" : running ? "SalesHawk is prospecting…" : data
-            ? `${finds.length} new leads added${data.date ? ` — ${data.date}` : ""}`
+            ? <span>{finds.length} leads added{data.date ? ` — ${data.date}` : ""}{lastRunTime ? <span className="ml-2 text-emerald-600 font-mono">Last run: {lastRunTime} CT</span> : null}{errors.length > 0 ? <span className="ml-2 text-destructive">{errors.length} failed</span> : null}</span>
             : "No run yet today — click Run Now"}
         </CardDescription>
       </CardHeader>
@@ -234,6 +240,22 @@ function TodaysFindsWidget() {
                 </div>
               );
             })}
+            {/* Errors section */}
+            {errors.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-destructive/20">
+                <p className="text-xs font-mono font-semibold uppercase tracking-wider mb-2 text-destructive">
+                  Failed — {errors.length} issue{errors.length !== 1 ? "s" : ""}
+                </p>
+                <div className="space-y-1">
+                  {errors.map((e, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs text-destructive/80 bg-destructive/5 rounded px-2 py-1.5">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      <span><span className="font-medium">{BUSINESS_LABELS[e.business] ?? e.business}:</span> {e.error ?? "Insert failed"}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </CardContent>

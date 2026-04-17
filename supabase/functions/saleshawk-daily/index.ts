@@ -15,7 +15,7 @@ const DAILY_RUNS = [
 Target titles: Superintendent, Assistant Superintendent, Curriculum Director, EdTech Director, Director of Teaching & Learning.
 Target districts: public and charter school districts in Hennepin, Ramsey, Dakota, Anoka, Washington, and Scott counties.
 Prioritize: people who have posted about AI in education, professional development, or instructional technology on LinkedIn recently.
-Company size: districts with 500–50,000 students. Exclude districts already in the leads table if possible.`,
+Company size: districts with 500–50,000 students.`,
   },
   {
     business: "tailoredu",
@@ -37,28 +37,17 @@ Also target: HR directors and L&D managers at Twin Cities companies interested i
   },
 ];
 
-// Map business to CRM Supabase client
 function getCrmClient(business: string) {
   const configs: Record<string, { url: string; key: string }> = {
-    realpath: {
-      url: Deno.env.get("CRM_REALPATH_URL")!,
-      key: Deno.env.get("CRM_REALPATH_SERVICE_KEY")!,
-    },
-    tailoredu: {
-      url: Deno.env.get("CRM_TAILOREDU_URL")!,
-      key: Deno.env.get("CRM_TAILOREDU_SERVICE_KEY")!,
-    },
-    aiwhisperers: {
-      url: Deno.env.get("CRM_AIWHISPERERS_URL")!,
-      key: Deno.env.get("CRM_AIWHISPERERS_SERVICE_KEY")!,
-    },
+    realpath: { url: Deno.env.get("CRM_REALPATH_URL")!, key: Deno.env.get("CRM_REALPATH_SERVICE_KEY")! },
+    tailoredu: { url: Deno.env.get("CRM_TAILOREDU_URL")!, key: Deno.env.get("CRM_TAILOREDU_SERVICE_KEY")! },
+    aiwhisperers: { url: Deno.env.get("CRM_AIWHISPERERS_URL")!, key: Deno.env.get("CRM_AIWHISPERERS_SERVICE_KEY")! },
   };
   const config = configs[business];
   if (!config) throw new Error(`Unknown business: ${business}`);
   return createClient(config.url, config.key);
 }
 
-// Hunter.io email lookup
 async function findEmail(firstName: string, lastName: string, domain: string): Promise<string | null> {
   const apiKey = Deno.env.get("HUNTER_API_KEY");
   if (!apiKey || !domain) return null;
@@ -68,9 +57,7 @@ async function findEmail(firstName: string, lastName: string, domain: string): P
     if (!res.ok) return null;
     const { data } = await res.json();
     return data?.email ?? null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 function splitName(name: string): { first: string; last: string } {
@@ -79,11 +66,8 @@ function splitName(name: string): { first: string; last: string } {
 }
 
 function urlToDomain(url: string): string | null {
-  try {
-    return new URL(url.startsWith("http") ? url : `https://${url}`).hostname.replace(/^www\./, "");
-  } catch {
-    return null;
-  }
+  try { return new URL(url.startsWith("http") ? url : `https://${url}`).hostname.replace(/^www\./, ""); }
+  catch { return null; }
 }
 
 interface Prospect {
@@ -96,25 +80,33 @@ interface Prospect {
   score: number;
 }
 
+// Attempt to repair malformed JSON using a second Claude call
+async function repairJson(anthropic: Anthropic, rawText: string): Promise<Prospect[]> {
+  const repair = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 4096,
+    system: "You are a JSON repair tool. Extract and return ONLY a valid JSON array from the input. No explanation, no markdown, just the array.",
+    messages: [{ role: "user", content: `Extract the JSON array from this text:\n\n${rawText}` }],
+  });
+  const repairText = repair.content.find((b) => b.type === "text")?.text ?? "";
+  const match = repairText.match(/\[[\s\S]*\]/);
+  if (!match) throw new Error("JSON repair failed");
+  return JSON.parse(match[0]) as Prospect[];
+}
+
 async function researchProspects(icp: string, count: number, business: string): Promise<Prospect[]> {
   const anthropic = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY")! });
 
-  const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 4096,
-    tools: [{ type: "web_search_20250305", name: "web_search" }],
-    system: `You are SalesHawk, an elite sales researcher for Shannon Seaver's businesses in Minneapolis. Find real, verifiable people who match the ICP. Use web search to confirm they exist and gather signals. Return ONLY a valid JSON array, no other text.`,
-    messages: [{
-      role: "user",
-      content: `Find ${count} prospects matching this ICP for ${business}:
+  const userPrompt = `Find ${count} real, verifiable prospects matching this ICP for ${business}:
 
 ${icp}
 
-Today's date: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+Today: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
 
-Search for real people. Verify they exist. Find their company websites and LinkedIn profiles.
+Search for real people. Verify they exist. Find company websites and LinkedIn profiles.
+You MUST respond with ONLY a JSON array — no prose, no markdown, no explanation.
+Start your response with [ and end with ].
 
-Return a JSON array only:
 [
   {
     "name": "Full Name",
@@ -122,21 +114,98 @@ Return a JSON array only:
     "company": "Company Name",
     "website": "company.com or null",
     "linkedin_url": "https://linkedin.com/in/handle or null",
-    "notes": "Why this person fits — specific signals like recent posts, mutual connections, company initiatives",
+    "notes": "Why this person fits — specific signals",
     "score": 75
   }
-]`,
-    }],
+]`;
+
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 4096,
+    tools: [{ type: "web_search_20250305", name: "web_search" }] as any,
+    system: "You are SalesHawk, an elite sales researcher. Use web search to find real people matching the ICP. Always end your final response with a valid JSON array and nothing else.",
+    messages: [
+      { role: "user", content: userPrompt },
+      // Prefill forces Claude to start with [ after tool use completes
+      { role: "assistant", content: "[" },
+    ],
   } as any);
 
-  let jsonText = "";
+  // Reconstruct full JSON: prepend the "[" prefill to Claude's continuation
+  let jsonText = "[";
   for (const block of response.content) {
-    if (block.type === "text") jsonText = block.text;
+    if (block.type === "text") jsonText += block.text;
   }
 
-  const match = jsonText.match(/\[[\s\S]*\]/);
-  if (!match) throw new Error(`Claude did not return valid JSON for ${business}`);
-  return JSON.parse(match[0]) as Prospect[];
+  try {
+    const match = jsonText.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error("no array found");
+    return JSON.parse(match[0]) as Prospect[];
+  } catch {
+    console.warn(`JSON parse failed for ${business}, attempting repair...`);
+    return repairJson(anthropic, jsonText);
+  }
+}
+
+interface FindResult {
+  business: string;
+  name: string;
+  title: string;
+  company: string;
+  score: number;
+  linkedin_url: string | null;
+  email: string | null;
+  notes: string;
+  status: "inserted" | "error";
+  error?: string;
+}
+
+// Process a single business run — returns its finds
+async function prospectForBusiness(run: typeof DAILY_RUNS[0]): Promise<FindResult[]> {
+  const finds: FindResult[] = [];
+  const prospects = await researchProspects(run.icp, run.count, run.business);
+  const crm = getCrmClient(run.business);
+
+  await Promise.all(prospects.map(async (prospect) => {
+    let email: string | null = null;
+    const domain = prospect.website ? urlToDomain(prospect.website) : null;
+    if (domain) {
+      const { first, last } = splitName(prospect.name);
+      email = await findEmail(first, last, domain);
+    }
+
+    const { error } = await crm.from("leads").insert({
+      business: run.business,
+      name: prospect.name,
+      email,
+      company: prospect.company || null,
+      title: prospect.title || null,
+      phone: null,
+      linkedin_url: prospect.linkedin_url || null,
+      source: "ai_agent",
+      notes: prospect.notes || null,
+      score: prospect.score ?? 50,
+      status: "new",
+    });
+
+    if (error) console.error(`Insert failed [${run.business}] ${prospect.name}: ${error.message}`);
+    else console.log(`✓ ${prospect.name} → ${run.business} CRM`);
+
+    finds.push({
+      business: run.business,
+      name: prospect.name,
+      title: prospect.title,
+      company: prospect.company,
+      score: prospect.score ?? 50,
+      linkedin_url: prospect.linkedin_url || null,
+      email,
+      notes: prospect.notes || "",
+      status: error ? "error" : "inserted",
+      error: error?.message,
+    });
+  }));
+
+  return finds;
 }
 
 async function runProspecting(): Promise<void> {
@@ -145,103 +214,60 @@ async function runProspecting(): Promise<void> {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
-  const runDate = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  const allFinds: Array<{
-    business: string;
-    name: string;
-    title: string;
-    company: string;
-    score: number;
-    linkedin_url: string | null;
-    email: string | null;
-    notes: string;
-    status: string;
-  }> = [];
+  // Fix #6: Run all 3 businesses in parallel — cuts runtime from ~3 min to ~1 min
+  const settledResults = await Promise.allSettled(DAILY_RUNS.map(prospectForBusiness));
 
-  for (const run of DAILY_RUNS) {
-    console.log(`Prospecting for ${run.business} (${run.count} leads)...`);
-    try {
-      const prospects = await researchProspects(run.icp, run.count, run.business);
-      const crm = getCrmClient(run.business);
-
-      for (const prospect of prospects) {
-        let email: string | null = null;
-        const domain = prospect.website ? urlToDomain(prospect.website) : null;
-        if (domain) {
-          const { first, last } = splitName(prospect.name);
-          email = await findEmail(first, last, domain);
-        }
-
-        const leadRow = {
-          business: run.business,
-          name: prospect.name,
-          email,
-          company: prospect.company || null,
-          title: prospect.title || null,
-          phone: null,
-          linkedin_url: prospect.linkedin_url || null,
-          source: "ai_agent",
-          notes: prospect.notes || null,
-          score: prospect.score ?? 50,
-          status: "new",
-        };
-
-        const { error } = await crm.from("leads").insert(leadRow);
-
-        allFinds.push({
-          business: run.business,
-          name: prospect.name,
-          title: prospect.title,
-          company: prospect.company,
-          score: prospect.score ?? 50,
-          linkedin_url: prospect.linkedin_url || null,
-          email,
-          notes: prospect.notes || "",
-          status: error ? "error" : "inserted",
-        });
-
-        if (error) console.error(`Failed to insert ${prospect.name}:`, error.message);
-        else console.log(`✓ ${prospect.name} → ${run.business} CRM`);
-      }
-    } catch (err) {
-      console.error(`Error prospecting for ${run.business}:`, err);
+  const allFinds: FindResult[] = [];
+  for (let i = 0; i < settledResults.length; i++) {
+    const result = settledResults[i];
+    if (result.status === "fulfilled") {
+      allFinds.push(...result.value);
+    } else {
+      // Entire business run failed — record it so the dashboard can show it
+      console.error(`Business run failed [${DAILY_RUNS[i].business}]:`, result.reason);
       allFinds.push({
-        business: run.business,
-        name: `Error: ${String(err)}`,
+        business: DAILY_RUNS[i].business,
+        name: "Run failed",
         title: "",
         company: "",
         score: 0,
         linkedin_url: null,
         email: null,
-        notes: "",
+        notes: String(result.reason),
         status: "error",
+        error: String(result.reason),
       });
     }
   }
 
   const inserted = allFinds.filter((f) => f.status === "inserted");
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const runTime = new Date().toISOString();
 
+  // Fix #1: agent_id stored as text slug "saleshawk" — requires widget_data.agent_id to be TEXT type
   await staffMeetingSupabase.from("widget_data").upsert({
     agent_id: "saleshawk",
     widget_key: "todays_finds",
-    data: { date: runDate, total: inserted.length, finds: allFinds },
-    expires_at: expiresAt,
-    updated_at: new Date().toISOString(),
+    data: {
+      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      run_time: runTime,
+      total: inserted.length,
+      finds: allFinds,
+    },
+    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    updated_at: runTime,
   }, { onConflict: "agent_id,widget_key" });
 
-  console.log(`saleshawk-daily complete: ${inserted.length} inserted of ${allFinds.length} finds`);
+  console.log(`saleshawk-daily complete: ${inserted.length}/${allFinds.length} inserted`);
 }
 
 Deno.serve((req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  // Run in background so we don't hit the 150s request timeout
-  // @ts-ignore - EdgeRuntime is provided by Supabase edge runtime
-  EdgeRuntime.waitUntil(runProspecting().catch((err) => console.error("saleshawk-daily background error:", err)));
+  // @ts-ignore
+  EdgeRuntime.waitUntil(runProspecting().catch((err) => console.error("saleshawk-daily error:", err)));
 
   return new Response(
-    JSON.stringify({ ok: true, status: "started", message: "Prospecting running in background. Check widget_data in ~2-3 min." }),
+    JSON.stringify({ ok: true, status: "started", message: "Prospecting running in background (~1 min). Check widget_data when done." }),
     { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 });
