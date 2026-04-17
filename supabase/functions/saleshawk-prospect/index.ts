@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.20.0";
+import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.32.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -104,10 +104,10 @@ Search for real people, verify they exist, find their company websites. Return a
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 4096,
-    tools: [{ type: "web_search_20250305", name: "web_search" } as any],
+    tools: [{ type: "web_search_20250305", name: "web_search" }],
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
-  });
+  } as any);
 
   // Extract the final text block (after tool use)
   let jsonText = "";
