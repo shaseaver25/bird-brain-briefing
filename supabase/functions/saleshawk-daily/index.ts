@@ -124,12 +124,9 @@ CRITICAL OUTPUT FORMAT: Your final message must contain ONLY a valid JSON array 
     max_tokens: 4096,
     tools: [{ type: "web_search_20250305", name: "web_search" }] as any,
     system: "You are SalesHawk, an elite sales researcher. Use web search to find real people matching the ICP. Your final response MUST be a valid JSON array starting with [ and ending with ]. Output nothing else — no prose, no markdown.",
-    messages: [
-      { role: "user", content: userPrompt },
-    ],
+    messages: [{ role: "user", content: userPrompt }],
   } as any);
 
-  // Collect all text blocks from Claude's response
   let jsonText = "";
   for (const block of response.content) {
     if (block.type === "text") jsonText += block.text;
