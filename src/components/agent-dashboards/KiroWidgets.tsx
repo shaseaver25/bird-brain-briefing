@@ -305,84 +305,9 @@ function InfraHealthWidget() {
 }
 
 export default function KiroWidgets() {
-  const metricItems = [
-    { ...LAMBDA_METRICS.invocations, icon: Zap, fmt: (v: number) => v.toLocaleString() },
-    { ...LAMBDA_METRICS.errors, icon: AlertTriangle, fmt: (v: number) => v.toString() },
-    { ...LAMBDA_METRICS.avgDuration, icon: Clock, fmt: (v: number) => `${v}ms` },
-    { ...LAMBDA_METRICS.throttles, icon: Shield, fmt: (v: number) => v.toString() },
-  ];
-
   return (
     <div className="space-y-6">
-      {/* Intelligence Feed — live */}
       <IntelFeedWidget />
-
-      {/* KPIs */}
-      <div className="grid grid-cols-2 gap-4">
-        {metricItems.map((m) => (
-          <Card key={m.label}>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2 mb-2">
-                <m.icon className="h-4 w-4 text-cyan-500" />
-                <span className="text-xs text-muted-foreground">{m.label}</span>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <p className="text-2xl font-bold">{m.fmt(m.value)}</p>
-                <span className={`text-xs font-mono ${m.trend.startsWith("-") ? "text-emerald-500" : m.trend === "0" ? "text-muted-foreground" : "text-emerald-500"}`}>{m.trend}</span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Infra Health */}
-      <InfraHealthWidget />
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Deploy Logs */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2"><Rocket className="h-5 w-5 text-cyan-500" />Recent Deployments</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {DEPLOY_LOGS.map((d, i) => (
-              <div key={`${d.service}-${i}`} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
-                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${d.status === "success" ? "bg-emerald-500" : "bg-red-500"}`} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium font-mono">{d.service}</p>
-                    <span className="text-xs font-mono text-muted-foreground">{d.version}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{d.deployer} · {d.timestamp}</p>
-                </div>
-                <Badge variant={d.status === "success" ? "outline" : "destructive"} className="text-[10px] shrink-0">{d.status}</Badge>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* Uptime */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2"><Activity className="h-5 w-5 text-cyan-500" />Uptime (30 days)</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {UPTIME_DATA.map((svc) => (
-              <div key={svc.service} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium">{svc.service}</p>
-                  <span className={`text-sm font-mono font-bold ${svc.percent >= 99.5 ? "text-emerald-500" : svc.percent >= 98 ? "text-amber-500" : "text-red-500"}`}>{svc.percent}%</span>
-                </div>
-                <div className="flex gap-0.5">
-                  {svc.dots.map((up, i) => (
-                    <div key={i} className={`h-4 flex-1 rounded-sm ${up ? "bg-emerald-500/60" : "bg-red-500/60"}`} />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }
