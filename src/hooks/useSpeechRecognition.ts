@@ -1,14 +1,43 @@
 import { useState, useCallback, useRef } from "react";
+import { toast } from "@/hooks/use-toast";
 
 export function useSpeechRecognition() {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
-  const startListening = useCallback(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const startListening = useCallback(async () => {
+    setError(null);
+
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      console.error("Speech recognition not supported");
+      const msg =
+        "Speech recognition is not supported in this browser. Use Chrome, Edge, or Safari.";
+      setError(msg);
+      toast({ variant: "destructive", title: "Mic unavailable", description: msg });
+      return;
+    }
+
+    // Proactively request mic permission so we can surface a clear error
+    // before the SpeechRecognition API silently fails.
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // We only needed permission — release the stream immediately so the
+      // SpeechRecognition API can take over the mic.
+      stream.getTracks().forEach((t) => t.stop());
+    } catch (err: any) {
+      let msg = "Microphone access failed.";
+      if (err?.name === "NotAllowedError") {
+        msg = "Microphone permission denied. Allow mic access in your browser settings and reload.";
+      } else if (err?.name === "NotFoundError") {
+        msg = "No microphone found. Plug one in and try again.";
+      } else if (err?.name === "NotReadableError") {
+        msg = "Microphone is in use by another app. Close it and retry.";
+      }
+      setError(msg);
+      toast({ variant: "destructive", title: "Microphone error", description: msg });
       return;
     }
 
@@ -29,14 +58,36 @@ export function useSpeechRecognition() {
       setIsListening(false);
     };
 
-    recognition.onerror = () => {
+    recognition.onerror = (event: any) => {
+      const errType = event?.error || "unknown";
+      let msg = `Speech recognition error: ${errType}`;
+      if (errType === "not-allowed" || errType === "service-not-allowed") {
+        msg = "Microphone permission denied. Allow mic access in your browser settings.";
+      } else if (errType === "no-speech") {
+        msg = "No speech detected. Try speaking closer to the mic.";
+      } else if (errType === "audio-capture") {
+        msg = "No microphone detected.";
+      } else if (errType === "network") {
+        msg = "Network error — speech recognition needs an internet connection.";
+      }
+      console.error("[useSpeechRecognition] error:", errType, event);
+      setError(msg);
+      toast({ variant: "destructive", title: "Mic error", description: msg });
       setIsListening(false);
     };
 
-    recognitionRef.current = recognition;
-    recognition.start();
-    setIsListening(true);
-    setTranscript("");
+    try {
+      recognitionRef.current = recognition;
+      setTranscript("");
+      recognition.start();
+      setIsListening(true);
+    } catch (err) {
+      console.error("[useSpeechRecognition] start failed:", err);
+      const msg = "Could not start speech recognition. Try again.";
+      setError(msg);
+      toast({ variant: "destructive", title: "Mic error", description: msg });
+      setIsListening(false);
+    }
   }, []);
 
   const stopListening = useCallback(() => {
@@ -44,5 +95,5 @@ export function useSpeechRecognition() {
     setIsListening(false);
   }, []);
 
-  return { isListening, transcript, startListening, stopListening };
+  return { isListening, transcript, error, startListening, stopListening };
 }
