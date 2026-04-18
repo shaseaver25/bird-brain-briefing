@@ -1,11 +1,32 @@
 import { useState, useCallback, useRef } from "react";
 import { toast } from "@/hooks/use-toast";
 
+interface SRState {
+  isListening: boolean;
+  transcript: string;
+  error: string | null;
+}
+
 export function useSpeechRecognition() {
-  const [isListening, setIsListening] = useState(false);
-  const [transcript, setTranscript] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState<SRState>({
+    isListening: false,
+    transcript: "",
+    error: null,
+  });
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+
+  const setIsListening = useCallback(
+    (v: boolean) => setState((s) => ({ ...s, isListening: v })),
+    []
+  );
+  const setTranscript = useCallback(
+    (v: string) => setState((s) => ({ ...s, transcript: v })),
+    []
+  );
+  const setError = useCallback(
+    (v: string | null) => setState((s) => ({ ...s, error: v })),
+    []
+  );
 
   const startListening = useCallback(async () => {
     setError(null);
