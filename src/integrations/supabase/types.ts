@@ -365,6 +365,48 @@ export type Database = {
         }
         Relationships: []
       }
+      kiro_intel: {
+        Row: {
+          business: string | null
+          expires_at: string
+          found_at: string | null
+          id: string
+          relevance: string | null
+          source: string | null
+          summary: string | null
+          title: string
+          topic_id: string
+          topic_label: string
+          url: string
+        }
+        Insert: {
+          business?: string | null
+          expires_at: string
+          found_at?: string | null
+          id?: string
+          relevance?: string | null
+          source?: string | null
+          summary?: string | null
+          title: string
+          topic_id: string
+          topic_label: string
+          url: string
+        }
+        Update: {
+          business?: string | null
+          expires_at?: string
+          found_at?: string | null
+          id?: string
+          relevance?: string | null
+          source?: string | null
+          summary?: string | null
+          title?: string
+          topic_id?: string
+          topic_label?: string
+          url?: string
+        }
+        Relationships: []
+      }
       mcp_tools: {
         Row: {
           auth_config: Json
