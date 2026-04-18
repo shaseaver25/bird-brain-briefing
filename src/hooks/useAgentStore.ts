@@ -126,10 +126,7 @@ async function loadFromCloud(userId: string): Promise<StoreState | null> {
 
     if (error || !data) return null;
 
-    const agents = (data.agents as unknown as AgentConfig[]).map((a, i) => ({
-      ...a,
-      speakOrder: a.speakOrder ?? i + 1,
-    }));
+    const agents = mergeWithDefaults(data.agents as unknown as AgentConfig[]);
 
     return { agents, apiKey: (data.api_key as string) || "", anthropicKey: (data.anthropic_key as string) || "", useMcpBackend: (data as any).use_mcp_backend ?? false };
   } catch {
