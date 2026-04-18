@@ -107,14 +107,26 @@ function useKiroIntel() {
 
   async function runNow() {
     setRunning(true);
+    const startCount = articles.length;
+    const startLatest = articles[0]?.found_at ?? "";
     try {
       await supabase.functions.invoke("kiro-daily");
-      // Poll until new articles appear
       let attempts = 0;
       const poll = setInterval(async () => {
         attempts++;
-        await loadArticles();
-        if (attempts >= 12) { // 3 min max
+        const { data } = await supabase
+          .from("kiro_intel")
+          .select("*")
+          .gt("expires_at", new Date().toISOString())
+          .order("found_at", { ascending: false });
+        const rows = (data ?? []) as IntelArticle[];
+        const newest = rows[0]?.found_at ?? "";
+        if (rows.length > startCount || (newest && newest !== startLatest)) {
+          setArticles(rows);
+          if (rows[0]) setLastUpdated(new Date(rows[0].found_at));
+          clearInterval(poll);
+          setRunning(false);
+        } else if (attempts >= 12) {
           clearInterval(poll);
           setRunning(false);
         }
