@@ -20,6 +20,7 @@ export type Database = {
           description: string
           edge_function_code: string | null
           id: string
+          migration_ran_at: string | null
           name: string
           notes: string | null
           requested_by: string | null
@@ -34,6 +35,7 @@ export type Database = {
           description: string
           edge_function_code?: string | null
           id?: string
+          migration_ran_at?: string | null
           name: string
           notes?: string | null
           requested_by?: string | null
@@ -48,6 +50,7 @@ export type Database = {
           description?: string
           edge_function_code?: string | null
           id?: string
+          migration_ran_at?: string | null
           name?: string
           notes?: string | null
           requested_by?: string | null
@@ -659,7 +662,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      exec_agent_migration: { Args: { _build_id: string }; Returns: Json }
     }
     Enums: {
       memory_type: "fact" | "preference" | "learned" | "instruction"
