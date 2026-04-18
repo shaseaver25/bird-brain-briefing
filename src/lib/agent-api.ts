@@ -75,6 +75,7 @@ const OPENCLAW_NAME_MAP: Record<string, string> = {
   "merlin": "Merlin",
   "kiro": "Kiro",
   "warbler": "Kiro",
+  "owl": "Owl",
 };
 
 async function resolveAgentProfile(agentId: string): Promise<{
