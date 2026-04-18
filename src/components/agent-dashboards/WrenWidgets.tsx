@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -8,6 +8,7 @@ import {
   Calendar, CheckSquare, Mail, FileText, Share2, Clock,
   BarChart3, Layout, ThumbsUp, ThumbsDown, Linkedin, Twitter,
   Globe, Eye, Heart, MessageSquare, Repeat2, TrendingUp, RefreshCw,
+  Mic, Volume2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -510,11 +511,175 @@ function ContentCalendarWidget() {
   );
 }
 
+// --- Morning Briefing Hook ---
+
+function useMorningBriefing() {
+  const [briefing, setBriefing] = useState<string | null>(null);
+  const [compiledAt, setCompiledAt] = useState<Date | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [compiling, setCompiling] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  async function loadCached(): Promise<string | null> {
+    const { data } = await supabase
+      .from("widget_data")
+      .select("data, updated_at")
+      .eq("agent_id", "wren")
+      .eq("widget_key", "morning_briefing")
+      .maybeSingle();
+    if (data?.data) {
+      const d = data.data as { briefing?: string };
+      if (d?.briefing) {
+        setBriefing(d.briefing);
+        if (data.updated_at) setCompiledAt(new Date(data.updated_at));
+        return d.briefing;
+      }
+    }
+    return null;
+  }
+
+  function stopPolling() {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  }
+
+  async function compile() {
+    setCompiling(true);
+    stopPolling();
+    const prevAt = compiledAt?.toISOString() ?? null;
+    try {
+      await supabase.functions.invoke("wren-briefing");
+      let attempts = 0;
+      pollRef.current = setInterval(async () => {
+        attempts++;
+        const { data } = await supabase
+          .from("widget_data")
+          .select("data, updated_at")
+          .eq("agent_id", "wren")
+          .eq("widget_key", "morning_briefing")
+          .maybeSingle();
+        if (data?.updated_at && data.updated_at !== prevAt) {
+          const d = data.data as { briefing?: string };
+          if (d?.briefing) setBriefing(d.briefing);
+          setCompiledAt(new Date(data.updated_at));
+          stopPolling();
+          setCompiling(false);
+        }
+        if (attempts >= 16) { stopPolling(); setCompiling(false); }
+      }, 15000);
+    } catch (err) {
+      console.error("wren-briefing failed:", err);
+      setCompiling(false);
+    }
+  }
+
+  useEffect(() => {
+    loadCached().finally(() => setLoading(false));
+    return () => stopPolling();
+  }, []);
+
+  return { briefing, compiledAt, loading, compiling, compile };
+}
+
+// --- Morning Briefing Widget ---
+
+function MorningBriefingWidget() {
+  const { briefing, compiledAt, loading, compiling, compile } = useMorningBriefing();
+  const [speaking, setSpeaking] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  async function speakBriefing() {
+    if (!briefing) return;
+    setSpeaking(true);
+    try {
+      // Use ElevenLabs via the browser if available — fallback to Web Speech API
+      if ("speechSynthesis" in window) {
+        const utterance = new SpeechSynthesisUtterance(briefing);
+        utterance.rate = 0.95;
+        utterance.onend = () => setSpeaking(false);
+        utterance.onerror = () => setSpeaking(false);
+        window.speechSynthesis.speak(utterance);
+      }
+    } catch {
+      setSpeaking(false);
+    }
+  }
+
+  function stopSpeaking() {
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    setSpeaking(false);
+  }
+
+  return (
+    <Card className="border-blue-500/30">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Mic className="h-5 w-5 text-blue-500" />
+            Morning Briefing
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            {compiledAt && (
+              <span className="text-[10px] text-muted-foreground font-mono">
+                {compiledAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" })} CT
+              </span>
+            )}
+            <button
+              onClick={compile}
+              disabled={compiling}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 transition-colors disabled:opacity-40"
+            >
+              <RefreshCw className={`h-3 w-3 ${compiling ? "animate-spin" : ""}`} />
+              {compiling ? "Compiling…" : "Refresh"}
+            </button>
+          </div>
+        </div>
+        <CardDescription>
+          {loading ? "Loading…" : compiling ? "Wren is reading your calendar, emails, and agent reports…" : briefing ? "Ready to speak" : "No briefing yet — click Refresh"}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {loading || compiling ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => <div key={i} className="h-4 rounded bg-muted animate-pulse" style={{ width: `${90 - i * 10}%` }} />)}
+          </div>
+        ) : briefing ? (
+          <div className="space-y-4">
+            <p className="text-sm leading-relaxed text-foreground">{briefing}</p>
+            <div className="flex items-center gap-2">
+              {speaking ? (
+                <button
+                  onClick={stopSpeaking}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-mono bg-red-500/10 text-red-600 hover:bg-red-500/20 transition-colors"
+                >
+                  <Volume2 className="h-3.5 w-3.5 animate-pulse" /> Stop
+                </button>
+              ) : (
+                <button
+                  onClick={speakBriefing}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-mono bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 transition-colors"
+                >
+                  <Volume2 className="h-3.5 w-3.5" /> Read Aloud
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-6">
+            <p className="text-sm text-muted-foreground">No briefing compiled yet.</p>
+            <p className="text-xs text-muted-foreground mt-1">Runs automatically at 7:05 AM, or click Refresh.</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function WrenWidgets() {
   const { calendarItems, emailItems, loading, refreshing, lastUpdated, refresh } = useLiveWrenData();
 
   return (
     <div className="space-y-6">
+      <MorningBriefingWidget />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <CalendarOverviewWidget
           items={calendarItems}

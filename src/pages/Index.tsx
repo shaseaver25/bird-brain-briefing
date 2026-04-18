@@ -226,7 +226,30 @@ export default function Index({ userId }: IndexProps) {
             </button>
 
             <button
-              onClick={() => setMeetingActive(!meetingActive)}
+              onClick={async () => {
+                const starting = !meetingActive;
+                setMeetingActive(starting);
+                if (starting) {
+                  // Find Wren and have her deliver the briefing automatically
+                  const wren = store.agents.find((a) => a.name.toLowerCase() === "wren");
+                  if (wren) {
+                    const handle = panelRefs.current.get(wren.id);
+                    if (handle) {
+                      // Small delay so the meeting UI renders first
+                      setTimeout(async () => {
+                        const reply = await handle.sendMeetingMessage(
+                          "__AUTO_BRIEFING__",
+                          ["[Meeting started — Wren delivers morning briefing]"]
+                        );
+                        if (reply && reply.trim() !== "---") {
+                          meetingTranscriptRef.current.push(`Wren: ${reply}`);
+                          await handle.speak(reply);
+                        }
+                      }, 800);
+                    }
+                  }
+                }
+              }}
               className="flex items-center gap-2 px-5 py-2.5 rounded-md font-mono text-sm font-medium transition-all duration-300"
               style={{
                 backgroundColor: meetingActive ? "hsl(var(--destructive))" : "hsl(var(--primary))",
