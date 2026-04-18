@@ -265,45 +265,6 @@ function IntelFeedWidget() {
   );
 }
 
-// --- Infrastructure Widgets (unchanged) ---
-
-function InfraHealthWidget() {
-  const healthyCt = SERVICES.filter((s) => s.status === "healthy").length;
-  const degradedCt = SERVICES.filter((s) => s.status === "degraded").length;
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2"><Server className="h-5 w-5 text-cyan-500" />Infrastructure Health</CardTitle>
-        <CardDescription>
-          <span className="text-emerald-500 font-medium">{healthyCt} healthy</span>
-          {degradedCt > 0 && <> · <span className="text-amber-500 font-medium">{degradedCt} degraded</span></>}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {SERVICES.map((svc) => {
-          const style = STATUS_STYLES[svc.status];
-          return (
-            <div key={svc.service} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
-              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${style.dot}`} />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium">{svc.service}</p>
-                  {svc.status !== "healthy" && <Badge variant="outline" className={`text-[10px] ${style.text}`}>{style.label}</Badge>}
-                </div>
-                <p className="text-xs text-muted-foreground">{svc.details}</p>
-              </div>
-              <div className="text-right shrink-0">
-                <p className="text-xs font-mono">{svc.latency}</p>
-                <p className="text-[10px] text-muted-foreground">{svc.region}</p>
-              </div>
-            </div>
-          );
-        })}
-      </CardContent>
-    </Card>
-  );
-}
-
 export default function KiroWidgets() {
   return (
     <div className="space-y-6">
