@@ -245,7 +245,17 @@ export default function Index({ userId }: IndexProps) {
                           "__AUTO_BRIEFING__",
                           ["[Meeting started — Wren delivers morning briefing]"]
                         );
-                        if (!briefing || briefing.trim() === "---") {
+
+                        // Guard: don't propagate error strings or silences to other agents
+                        const isError = (s: string) =>
+                          !s ||
+                          s.trim() === "---" ||
+                          s.toLowerCase().includes("failed to load") ||
+                          s.toLowerCase().includes("connection error") ||
+                          s.toLowerCase().includes("please try again") ||
+                          s.toLowerCase().includes("not found");
+
+                        if (isError(briefing)) {
                           setIsBroadcasting(false);
                           return;
                         }
@@ -257,10 +267,11 @@ export default function Index({ userId }: IndexProps) {
                         if (abortRef.current) { setIsBroadcasting(false); return; }
 
                         // Step 2: Other agents hear the briefing and can react
+                        // Note: exclude ALL agents named "wren" (handles duplicate-Wren edge case)
+                        // Also allow agents without apiUrl (they use MCP/Anthropic key directly)
                         const others = store.agents.filter(
                           (a) => a.name.toLowerCase() !== "wren" &&
-                          meetingParticipants.has(a.id) &&
-                          a.apiUrl
+                          meetingParticipants.has(a.id)
                         ).sort((a, b) => a.speakOrder - b.speakOrder);
 
                         for (const agent of others) {
