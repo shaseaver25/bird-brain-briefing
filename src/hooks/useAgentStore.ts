@@ -91,15 +91,21 @@ const DEFAULT_AGENTS: AgentConfig[] = [
   },
 ];
 
+function mergeWithDefaults(agents: AgentConfig[]): AgentConfig[] {
+  const existingIds = new Set(agents.map((a) => a.id));
+  const missing = DEFAULT_AGENTS.filter((d) => !existingIds.has(d.id));
+  return [...agents, ...missing].map((a, i) => ({
+    ...a,
+    speakOrder: a.speakOrder ?? i + 1,
+  }));
+}
+
 function loadLocalState(): StoreState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      const agents = (parsed.agents || DEFAULT_AGENTS).map((a: AgentConfig, i: number) => ({
-        ...a,
-        speakOrder: a.speakOrder ?? i + 1,
-      }));
+      const agents = mergeWithDefaults(parsed.agents || DEFAULT_AGENTS);
       return { agents, apiKey: parsed.apiKey || "", anthropicKey: parsed.anthropicKey || "", useMcpBackend: parsed.useMcpBackend ?? false };
     }
   } catch {}
