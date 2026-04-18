@@ -1,136 +1,414 @@
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ClipboardList, AlertTriangle, Milestone, Clock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  ClipboardList,
+  Milestone,
+  Trophy,
+  CheckCircle2,
+  Circle,
+  Loader2,
+  AlertCircle,
+  RefreshCw,
+} from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
-const PROJECTS = [
-  { project: "AvidEdge Chrome Extension", status: "red" as const, owner: "Shannon", completion: 35, lastUpdate: "Apr 10" },
-  { project: "Co-Lab Membership Flow", status: "red" as const, owner: "Shannon", completion: 20, lastUpdate: "Apr 14" },
-  { project: "Conference Stripe Integration", status: "yellow" as const, owner: "Kiro", completion: 60, lastUpdate: "Apr 15" },
-  { project: "AI Whisperers Blog Redesign", status: "yellow" as const, owner: "Shannon", completion: 45, lastUpdate: "Apr 12" },
-  { project: "n8n Webhook Monitoring", status: "yellow" as const, owner: "Kiro", completion: 50, lastUpdate: "Apr 14" },
-  { project: "Wren Content Calendar v2", status: "green" as const, owner: "Wren", completion: 80, lastUpdate: "Apr 16" },
-  { project: "Donor Agent Tool Expansion", status: "green" as const, owner: "Osprey", completion: 85, lastUpdate: "Apr 16" },
-  { project: "Staff Meeting TTS Upgrade", status: "green" as const, owner: "Kiro", completion: 90, lastUpdate: "Apr 15" },
-  { project: "TailoredU Landing Page", status: "green" as const, owner: "Shannon", completion: 70, lastUpdate: "Apr 16" },
-];
+// ── Types ────────────────────────────────────────────────────────────────────
 
-const OVERDUE_ITEMS = [
-  { task: "Chrome Extension discovery spec", project: "AvidEdge", daysOverdue: 4, assignee: "Shannon", blocker: "Waiting on Juliet's feedback on candidate fields" },
-  { task: "Membership flow wireframes", project: "Co-Lab", daysOverdue: 2, assignee: "Shannon", blocker: "Pricing model not finalized" },
-  { task: "API endpoint documentation", project: "Staff Meeting", daysOverdue: 1, assignee: "Kiro", blocker: "None — just needs time" },
-];
+interface Project {
+  id: string;
+  name: string;
+  description: string | null;
+  status: "active" | "paused" | "completed" | "cancelled";
+  priority: "high" | "medium" | "low";
+  owner: string | null;
+  completion_pct: number;
+  deadline: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
-const MILESTONES = [
-  { milestone: "Conference Stripe webhooks", date: "Apr 17", project: "Conference Platform", completed: false },
-  { milestone: "Wren content calendar v2", date: "Apr 18", project: "Agent Platform", completed: false },
-  { milestone: "Co-Lab landing page copy", date: "Apr 18", project: "Co-Lab", completed: false },
-  { milestone: "Donor Agent beta launch", date: "Apr 22", project: "CRM", completed: false },
-  { milestone: "AvidEdge MVP demo", date: "Apr 25", project: "AvidEdge", completed: false },
-  { milestone: "Blog redesign live", date: "Apr 14", project: "AI Whisperers", completed: true },
-  { milestone: "TTS integration shipped", date: "Apr 12", project: "Staff Meeting", completed: true },
-];
+interface ProjectTask {
+  id: string;
+  project_id: string;
+  title: string;
+  status: "todo" | "in_progress" | "done" | "blocked";
+  assignee: string | null;
+  due_date: string | null;
+  blocker: string | null;
+  sort_order: number;
+}
 
-const STATUS_CONFIG = {
-  red: { label: "Overdue", dot: "bg-red-500", text: "text-red-500" },
-  yellow: { label: "At Risk", dot: "bg-amber-500", text: "text-amber-500" },
-  green: { label: "On Track", dot: "bg-emerald-500", text: "text-emerald-500" },
+// ── Constants ────────────────────────────────────────────────────────────────
+
+const HACKATHON_ID = "a1b20001-0001-0001-0001-000000000001";
+
+const PRIORITY_STYLES = {
+  high: "bg-red-500/10 text-red-600 border-red-500/20",
+  medium: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+  low: "bg-muted text-muted-foreground border-border",
 };
 
-export default function MerlinWidgets() {
-  const counts = { red: PROJECTS.filter((p) => p.status === "red").length, yellow: PROJECTS.filter((p) => p.status === "yellow").length, green: PROJECTS.filter((p) => p.status === "green").length };
-  const upcoming = MILESTONES.filter((m) => !m.completed);
-  const completed = MILESTONES.filter((m) => m.completed);
+const STATUS_DOT: Record<Project["status"], string> = {
+  active: "bg-emerald-500",
+  paused: "bg-amber-500",
+  completed: "bg-blue-500",
+  cancelled: "bg-muted-foreground",
+};
+
+const TASK_STATUS_CONFIG = {
+  done: { icon: CheckCircle2, color: "text-emerald-500", label: "Done" },
+  in_progress: { icon: Loader2, color: "text-amber-500", label: "In Progress" },
+  todo: { icon: Circle, color: "text-muted-foreground", label: "To Do" },
+  blocked: { icon: AlertCircle, color: "text-red-500", label: "Blocked" },
+};
+
+// ── Hook ─────────────────────────────────────────────────────────────────────
+
+function useMerlinProjects() {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [tasks, setTasks] = useState<ProjectTask[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [updatingTask, setUpdatingTask] = useState<string | null>(null);
+
+  async function loadData() {
+    setLoading(true);
+    const [{ data: projData }, { data: taskData }] = await Promise.all([
+      supabase
+        .from("projects")
+        .select("*")
+        .in("status", ["active", "paused"])
+        .order("priority", { ascending: true }) // high first (alphabetical: high < low < medium)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("project_tasks")
+        .select("*")
+        .order("sort_order", { ascending: true }),
+    ]);
+
+    if (projData) {
+      // Sort by priority weight
+      const weight = { high: 0, medium: 1, low: 2 };
+      setProjects(
+        (projData as Project[]).sort(
+          (a, b) => weight[a.priority] - weight[b.priority]
+        )
+      );
+    }
+    if (taskData) setTasks(taskData as ProjectTask[]);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  async function toggleTask(task: ProjectTask) {
+    // Cycle: todo → in_progress → done → todo
+    const cycle: Record<ProjectTask["status"], ProjectTask["status"]> = {
+      todo: "in_progress",
+      in_progress: "done",
+      done: "todo",
+      blocked: "todo",
+    };
+    const next = cycle[task.status];
+    setUpdatingTask(task.id);
+
+    const { error } = await supabase
+      .from("project_tasks")
+      .update({ status: next, updated_at: new Date().toISOString() })
+      .eq("id", task.id);
+
+    if (!error) {
+      setTasks((prev) =>
+        prev.map((t) => (t.id === task.id ? { ...t, status: next } : t))
+      );
+      // Recalculate project completion
+      const projectTasks = tasks.filter((t) => t.project_id === task.project_id);
+      const allWithUpdated = projectTasks.map((t) =>
+        t.id === task.id ? { ...t, status: next } : t
+      );
+      const done = allWithUpdated.filter((t) => t.status === "done").length;
+      const pct = Math.round((done / allWithUpdated.length) * 100);
+      await supabase
+        .from("projects")
+        .update({ completion_pct: pct, updated_at: new Date().toISOString() })
+        .eq("id", task.project_id);
+      setProjects((prev) =>
+        prev.map((p) =>
+          p.id === task.project_id ? { ...p, completion_pct: pct } : p
+        )
+      );
+    }
+    setUpdatingTask(null);
+  }
+
+  return { projects, tasks, loading, updatingTask, toggleTask, reload: loadData };
+}
+
+// ── Hackathon Hero Widget ─────────────────────────────────────────────────────
+
+function HackathonWidget({
+  project,
+  tasks,
+  updatingTask,
+  toggleTask,
+}: {
+  project: Project;
+  tasks: ProjectTask[];
+  updatingTask: string | null;
+  toggleTask: (t: ProjectTask) => void;
+}) {
+  const daysLeft = project.deadline
+    ? Math.ceil(
+        (new Date(project.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+      )
+    : null;
+
+  const done = tasks.filter((t) => t.status === "done").length;
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2"><ClipboardList className="h-5 w-5 text-amber-500" />Project Status Board</CardTitle>
-          <CardDescription className="flex items-center gap-4">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> {counts.red} overdue</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> {counts.yellow} at risk</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> {counts.green} on track</span>
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {PROJECTS.map((project) => {
-            const config = STATUS_CONFIG[project.status];
+    <Card className="border-amber-500/40 bg-amber-500/5">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Trophy className="h-5 w-5 text-amber-500 shrink-0" />
+            <div>
+              <CardTitle className="text-lg">{project.name}</CardTitle>
+              <CardDescription className="mt-0.5">{project.description}</CardDescription>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            {daysLeft !== null && (
+              <div className={`text-2xl font-bold ${daysLeft <= 3 ? "text-red-500" : "text-amber-500"}`}>
+                {daysLeft}d
+              </div>
+            )}
+            <div className="text-xs text-muted-foreground">until deadline</div>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Progress */}
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>{done} of {tasks.length} tasks done</span>
+            <span>{project.completion_pct}%</span>
+          </div>
+          <Progress value={project.completion_pct} className="h-2" />
+        </div>
+
+        {/* Task checklist */}
+        <div className="space-y-2">
+          {tasks.map((task) => {
+            const cfg = TASK_STATUS_CONFIG[task.status];
+            const Icon = cfg.icon;
+            const isUpdating = updatingTask === task.id;
             return (
-              <div key={project.project} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
-                <span className={`w-3 h-3 rounded-full shrink-0 ${config.dot}`} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{project.project}</p>
-                  <p className="text-xs text-muted-foreground">{project.owner} &middot; Updated {project.lastUpdate}</p>
+              <button
+                key={task.id}
+                onClick={() => toggleTask(task)}
+                disabled={isUpdating}
+                className="w-full flex items-center gap-2.5 text-left p-2 rounded-md hover:bg-muted/50 transition-colors group"
+              >
+                {isUpdating ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+                ) : (
+                  <Icon
+                    className={`h-4 w-4 shrink-0 ${cfg.color} ${task.status === "in_progress" ? "animate-spin" : ""}`}
+                  />
+                )}
+                <span
+                  className={`text-sm flex-1 ${task.status === "done" ? "line-through text-muted-foreground" : ""}`}
+                >
+                  {task.title}
+                </span>
+                {task.due_date && (
+                  <span className="text-[10px] text-muted-foreground shrink-0 font-mono">
+                    {new Date(task.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Project Board ────────────────────────────────────────────────────────────
+
+function ProjectBoardWidget({
+  projects,
+  tasks,
+}: {
+  projects: Project[];
+  tasks: ProjectTask[];
+}) {
+  const nonHackathon = projects.filter((p) => p.id !== HACKATHON_ID);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <ClipboardList className="h-5 w-5 text-amber-500" />
+          Project Board
+        </CardTitle>
+        <CardDescription>
+          {nonHackathon.filter((p) => p.status === "active").length} active projects
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {nonHackathon.map((project) => {
+          const projectTasks = tasks.filter((t) => t.project_id === project.id);
+          const blocked = projectTasks.filter((t) => t.status === "blocked").length;
+          return (
+            <div
+              key={project.id}
+              className="flex items-center gap-3 py-2.5 border-b border-border last:border-0"
+            >
+              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${STATUS_DOT[project.status]}`} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium truncate">{project.name}</p>
+                  {blocked > 0 && (
+                    <Badge variant="destructive" className="text-[10px] shrink-0">
+                      {blocked} blocked
+                    </Badge>
+                  )}
                 </div>
-                <div className="w-24 space-y-1">
-                  <Progress value={project.completion} className="h-2" />
-                  <p className="text-[10px] text-right text-muted-foreground">{project.completion}%</p>
+                <p className="text-xs text-muted-foreground">
+                  {project.owner} &middot;{" "}
+                  {project.deadline
+                    ? `Due ${new Date(project.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                    : "No deadline"}
+                </p>
+              </div>
+              <div className="w-28 space-y-1 shrink-0">
+                <Progress value={project.completion_pct} className="h-1.5" />
+                <p className="text-[10px] text-right text-muted-foreground">
+                  {project.completion_pct}%
+                </p>
+              </div>
+              <Badge
+                variant="outline"
+                className={`text-[10px] shrink-0 ${PRIORITY_STYLES[project.priority]}`}
+              >
+                {project.priority}
+              </Badge>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Timeline Widget ──────────────────────────────────────────────────────────
+
+function TimelineWidget({ projects }: { projects: Project[] }) {
+  const upcoming = projects
+    .filter((p) => p.deadline && p.status === "active")
+    .sort((a, b) => new Date(a.deadline!).getTime() - new Date(b.deadline!).getTime());
+
+  if (!upcoming.length) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Milestone className="h-5 w-5 text-amber-500" />
+          Upcoming Deadlines
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="relative pl-6 space-y-4">
+          <div className="absolute left-2 top-1 bottom-1 w-px bg-border" />
+          {upcoming.map((p) => {
+            const daysLeft = Math.ceil(
+              (new Date(p.deadline!).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+            );
+            const urgent = daysLeft <= 5;
+            return (
+              <div key={p.id} className="relative">
+                <div
+                  className={`absolute -left-4 top-1.5 w-3 h-3 rounded-full border-2 bg-background ${
+                    urgent ? "border-red-500" : "border-amber-500"
+                  }`}
+                />
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono text-muted-foreground w-16">
+                    {new Date(p.deadline!).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </span>
+                  <span className="text-sm font-medium">{p.name}</span>
+                  <span
+                    className={`text-xs ml-auto shrink-0 ${
+                      urgent ? "text-red-500 font-semibold" : "text-muted-foreground"
+                    }`}
+                  >
+                    {daysLeft}d left
+                  </span>
                 </div>
-                <Badge variant="outline" className={`text-[10px] ${config.text} shrink-0`}>{config.label}</Badge>
               </div>
             );
           })}
-        </CardContent>
-      </Card>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-red-500" />Overdue Items</CardTitle>
-            <CardDescription>{OVERDUE_ITEMS.length} items past deadline</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {OVERDUE_ITEMS.map((item) => (
-              <div key={item.task} className="p-3 rounded-md bg-red-500/5 border border-red-500/20">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-medium">{item.task}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{item.project} &middot; {item.assignee}</p>
-                  </div>
-                  <Badge variant="destructive" className="text-[10px] shrink-0">{item.daysOverdue}d overdue</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground mt-2 italic">Blocker: {item.blocker}</p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+// ── Root Component ────────────────────────────────────────────────────────────
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2"><Milestone className="h-5 w-5 text-amber-500" />Timeline</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="relative pl-6 space-y-4">
-              <div className="absolute left-2 top-1 bottom-1 w-px bg-border" />
-              {upcoming.map((m) => (
-                <div key={m.milestone} className="relative">
-                  <div className="absolute -left-4 top-1.5 w-3 h-3 rounded-full border-2 border-amber-500 bg-background" />
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-muted-foreground w-14">{m.date}</span>
-                    <span className="text-sm font-medium">{m.milestone}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground ml-16">{m.project}</p>
-                </div>
-              ))}
-              {completed.length > 0 && (
-                <div className="pt-2 border-t border-border">
-                  <p className="text-xs text-muted-foreground mb-3 font-medium uppercase tracking-wider"><Clock className="h-3 w-3 inline mr-1" />Recently completed</p>
-                  {completed.map((m) => (
-                    <div key={m.milestone} className="relative mb-3">
-                      <div className="absolute -left-4 top-1.5 w-3 h-3 rounded-full bg-emerald-500" />
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono text-muted-foreground w-14 line-through">{m.date}</span>
-                        <span className="text-sm text-muted-foreground line-through">{m.milestone}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+export default function MerlinWidgets() {
+  const { projects, tasks, loading, updatingTask, toggleTask, reload } =
+    useMerlinProjects();
+
+  const hackathon = projects.find((p) => p.id === HACKATHON_ID);
+  const hackathonTasks = tasks
+    .filter((t) => t.project_id === HACKATHON_ID)
+    .sort((a, b) => a.sort_order - b.sort_order);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-40 text-muted-foreground gap-2">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        <span className="text-sm">Loading projects…</span>
       </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header with reload */}
+      <div className="flex justify-end">
+        <Button variant="ghost" size="sm" onClick={reload} className="gap-1.5 text-xs text-muted-foreground">
+          <RefreshCw className="h-3.5 w-3.5" />
+          Refresh
+        </Button>
+      </div>
+
+      {/* Hackathon hero */}
+      {hackathon && (
+        <HackathonWidget
+          project={hackathon}
+          tasks={hackathonTasks}
+          updatingTask={updatingTask}
+          toggleTask={toggleTask}
+        />
+      )}
+
+      {/* Other projects */}
+      <ProjectBoardWidget projects={projects} tasks={tasks} />
+
+      {/* Deadline timeline */}
+      <TimelineWidget projects={projects} />
     </div>
   );
 }
