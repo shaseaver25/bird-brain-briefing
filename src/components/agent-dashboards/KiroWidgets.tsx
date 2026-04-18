@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Server, Activity, Rocket, Shield, Clock, Zap, AlertTriangle, Newspaper, RefreshCw, ExternalLink } from "lucide-react";
+import { Newspaper, RefreshCw, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 // --- Types ---
@@ -18,50 +17,6 @@ interface IntelArticle {
   business: string;
   found_at: string;
 }
-
-// --- Static infrastructure data ---
-
-type ServiceStatus = "healthy" | "degraded" | "down";
-const SERVICES: Array<{ service: string; status: ServiceStatus; latency: string; region: string; details: string }> = [
-  { service: "Supabase (PostgreSQL)", status: "healthy", latency: "12ms", region: "us-east-1", details: "2.1GB storage, 847 rows/sec" },
-  { service: "Staff Meeting API", status: "healthy", latency: "340ms", region: "us-east-1", details: "Edge Functions, Supabase" },
-  { service: "n8n Instance", status: "healthy", latency: "890ms", region: "us-east-1", details: "Self-hosted, 5 active workflows" },
-  { service: "ElevenLabs TTS", status: "healthy", latency: "450ms", region: "external", details: "API quota: 62% remaining" },
-  { service: "Anthropic API", status: "healthy", latency: "1.1s", region: "external", details: "Claude Sonnet 4.6" },
-  { service: "TinyFish", status: "healthy", latency: "~60s", region: "external", details: "Web automation, SSE streaming" },
-];
-
-const LAMBDA_METRICS = {
-  invocations: { value: 2847, label: "Invocations (24h)", trend: "+12%" },
-  errors: { value: 3, label: "Errors (24h)", trend: "-67%" },
-  avgDuration: { value: 842, label: "Avg Duration (ms)", trend: "-15%" },
-  throttles: { value: 0, label: "Throttles (24h)", trend: "0" },
-};
-
-const DEPLOY_LOGS = [
-  { service: "saleshawk-daily", version: "v1.3.0", status: "success" as const, timestamp: "Apr 18, 7:00 AM", deployer: "n8n" },
-  { service: "kiro-daily", version: "v1.0.0", status: "success" as const, timestamp: "Apr 18, 7:01 AM", deployer: "n8n" },
-  { service: "refresh-dashboard", version: "v1.1.0", status: "success" as const, timestamp: "Apr 17, 2:14 PM", deployer: "Shannon" },
-  { service: "saleshawk-draft", version: "v1.0.0", status: "success" as const, timestamp: "Apr 17, 11:30 AM", deployer: "Shannon" },
-  { service: "invoke-agent", version: "v1.0.0", status: "success" as const, timestamp: "Apr 15, 9:20 AM", deployer: "Shannon" },
-];
-
-function genDots(pct: number): boolean[] {
-  return Array.from({ length: 30 }, (_, i) => pct >= 100 ? true : i >= 30 - Math.round((1 - pct / 100) * 30));
-}
-
-const UPTIME_DATA = [
-  { service: "Supabase", percent: 100, dots: genDots(100) },
-  { service: "Anthropic API", percent: 99.9, dots: genDots(99.9) },
-  { service: "n8n", percent: 99.2, dots: genDots(99.2) },
-  { service: "ElevenLabs", percent: 99.7, dots: genDots(99.7) },
-];
-
-const STATUS_STYLES = {
-  healthy: { dot: "bg-emerald-500", label: "Healthy", text: "text-emerald-500" },
-  degraded: { dot: "bg-amber-500", label: "Degraded", text: "text-amber-500" },
-  down: { dot: "bg-red-500", label: "Down", text: "text-red-500" },
-};
 
 const RELEVANCE_STYLES = {
   high: "bg-red-500/10 text-red-600 border-red-500/20",
