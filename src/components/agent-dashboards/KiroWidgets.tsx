@@ -21,13 +21,14 @@ interface IntelArticle {
 
 // --- Static infrastructure data ---
 
-const SERVICES = [
-  { service: "Supabase (PostgreSQL)", status: "healthy" as const, latency: "12ms", region: "us-east-1", details: "2.1GB storage, 847 rows/sec" },
-  { service: "Staff Meeting API", status: "healthy" as const, latency: "340ms", region: "us-east-1", details: "Edge Functions, Supabase" },
-  { service: "n8n Instance", status: "healthy" as const, latency: "890ms", region: "us-east-1", details: "Self-hosted, 5 active workflows" },
-  { service: "ElevenLabs TTS", status: "healthy" as const, latency: "450ms", region: "external", details: "API quota: 62% remaining" },
-  { service: "Anthropic API", status: "healthy" as const, latency: "1.1s", region: "external", details: "Claude Sonnet 4.6" },
-  { service: "TinyFish", status: "healthy" as const, latency: "~60s", region: "external", details: "Web automation, SSE streaming" },
+type ServiceStatus = "healthy" | "degraded" | "down";
+const SERVICES: Array<{ service: string; status: ServiceStatus; latency: string; region: string; details: string }> = [
+  { service: "Supabase (PostgreSQL)", status: "healthy", latency: "12ms", region: "us-east-1", details: "2.1GB storage, 847 rows/sec" },
+  { service: "Staff Meeting API", status: "healthy", latency: "340ms", region: "us-east-1", details: "Edge Functions, Supabase" },
+  { service: "n8n Instance", status: "healthy", latency: "890ms", region: "us-east-1", details: "Self-hosted, 5 active workflows" },
+  { service: "ElevenLabs TTS", status: "healthy", latency: "450ms", region: "external", details: "API quota: 62% remaining" },
+  { service: "Anthropic API", status: "healthy", latency: "1.1s", region: "external", details: "Claude Sonnet 4.6" },
+  { service: "TinyFish", status: "healthy", latency: "~60s", region: "external", details: "Web automation, SSE streaming" },
 ];
 
 const LAMBDA_METRICS = {
