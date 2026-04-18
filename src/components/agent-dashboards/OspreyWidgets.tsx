@@ -256,6 +256,12 @@ function BuildCard({
           )}
         </div>
       )}
+      <DeployAgentModal
+        build={build}
+        open={deployOpen}
+        onOpenChange={setDeployOpen}
+        onDeployed={onRefresh}
+      />
     </div>
   );
 }
@@ -442,7 +448,12 @@ export default function OspreyWidgets() {
             </p>
           ) : (
             builds.map((build) => (
-              <BuildCard key={build.id} build={build} onMarkDeployed={markDeployed} />
+              <BuildCard
+                key={build.id}
+                build={build}
+                onMarkDeployed={markDeployed}
+                onRefresh={loadBuilds}
+              />
             ))
           )}
         </CardContent>
