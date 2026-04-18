@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_builds: {
+        Row: {
+          created_at: string | null
+          description: string
+          edge_function_code: string | null
+          id: string
+          name: string
+          notes: string | null
+          requested_by: string | null
+          sql_migration: string | null
+          status: string | null
+          system_prompt: string | null
+          updated_at: string | null
+          widget_code: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description: string
+          edge_function_code?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          requested_by?: string | null
+          sql_migration?: string | null
+          status?: string | null
+          system_prompt?: string | null
+          updated_at?: string | null
+          widget_code?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string
+          edge_function_code?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          requested_by?: string | null
+          sql_migration?: string | null
+          status?: string | null
+          system_prompt?: string | null
+          updated_at?: string | null
+          widget_code?: string | null
+        }
+        Relationships: []
+      }
       agent_memory: {
         Row: {
           agent_id: string
@@ -446,6 +491,92 @@ export type Database = {
           last_health_check?: string | null
           name?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      project_tasks: {
+        Row: {
+          assignee: string | null
+          blocker: string | null
+          created_at: string | null
+          due_date: string | null
+          id: string
+          project_id: string | null
+          sort_order: number | null
+          status: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          assignee?: string | null
+          blocker?: string | null
+          created_at?: string | null
+          due_date?: string | null
+          id?: string
+          project_id?: string | null
+          sort_order?: number | null
+          status?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          assignee?: string | null
+          blocker?: string | null
+          created_at?: string | null
+          due_date?: string | null
+          id?: string
+          project_id?: string | null
+          sort_order?: number | null
+          status?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          completion_pct: number | null
+          created_at: string | null
+          deadline: string | null
+          description: string | null
+          id: string
+          name: string
+          owner: string | null
+          priority: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          completion_pct?: number | null
+          created_at?: string | null
+          deadline?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          owner?: string | null
+          priority?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          completion_pct?: number | null
+          created_at?: string | null
+          deadline?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          owner?: string | null
+          priority?: string | null
+          status?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
