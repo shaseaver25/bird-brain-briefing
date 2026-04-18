@@ -237,14 +237,52 @@ export default function Index({ userId }: IndexProps) {
                     if (handle) {
                       // Small delay so the meeting UI renders first
                       setTimeout(async () => {
-                        const reply = await handle.sendMeetingMessage(
+                        setIsBroadcasting(true);
+                        abortRef.current = false;
+
+                        // Step 1: Wren delivers the briefing
+                        const briefing = await handle.sendMeetingMessage(
                           "__AUTO_BRIEFING__",
                           ["[Meeting started — Wren delivers morning briefing]"]
                         );
-                        if (reply && reply.trim() !== "---") {
-                          meetingTranscriptRef.current.push(`Wren: ${reply}`);
-                          await handle.speak(reply);
+                        if (!briefing || briefing.trim() === "---") {
+                          setIsBroadcasting(false);
+                          return;
                         }
+
+                        // Add to transcript so all other agents can hear it
+                        meetingTranscriptRef.current.push(`Wren: ${briefing}`);
+                        await handle.speak(briefing);
+
+                        if (abortRef.current) { setIsBroadcasting(false); return; }
+
+                        // Step 2: Other agents hear the briefing and can react
+                        const others = store.agents.filter(
+                          (a) => a.name.toLowerCase() !== "wren" &&
+                          meetingParticipants.has(a.id) &&
+                          a.apiUrl
+                        ).sort((a, b) => a.speakOrder - b.speakOrder);
+
+                        for (const agent of others) {
+                          if (abortRef.current) break;
+                          const agentHandle = panelRefs.current.get(agent.id);
+                          if (!agentHandle) continue;
+
+                          const reaction = await agentHandle.sendMeetingMessage(
+                            briefing,
+                            [...meetingTranscriptRef.current]
+                          );
+                          if (!reaction || reaction.trim() === "---") continue;
+
+                          meetingTranscriptRef.current.push(`${agent.name}: ${reaction}`);
+                          if (!abortRef.current) await agentHandle.speak(reaction);
+                        }
+
+                        // Trim transcript
+                        if (meetingTranscriptRef.current.length > 40) {
+                          meetingTranscriptRef.current = meetingTranscriptRef.current.slice(-40);
+                        }
+                        setIsBroadcasting(false);
                       }, 800);
                     }
                   }
