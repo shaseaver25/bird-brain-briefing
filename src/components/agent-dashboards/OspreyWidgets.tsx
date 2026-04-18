@@ -15,6 +15,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { DeployAgentModal } from "./DeployAgentModal";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -157,11 +158,14 @@ function CodeBlock({ label, code }: { label: string; code: string }) {
 function BuildCard({
   build,
   onMarkDeployed,
+  onRefresh,
 }: {
   build: AgentBuild;
   onMarkDeployed: (id: string) => void;
+  onRefresh: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [deployOpen, setDeployOpen] = useState(false);
   const style = STATUS_STYLES[build.status];
 
   return (
@@ -194,15 +198,15 @@ function BuildCard({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {build.status === "ready" && (
+          {(build.status === "ready" || build.status === "deployed") && (
             <Button
               size="sm"
               variant="outline"
-              className="text-xs gap-1.5 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/10"
-              onClick={() => onMarkDeployed(build.id)}
+              className="text-xs gap-1.5 text-purple-600 border-purple-500/30 hover:bg-purple-500/10"
+              onClick={() => setDeployOpen(true)}
             >
               <Rocket className="h-3.5 w-3.5" />
-              Mark Deployed
+              {build.status === "deployed" ? "Re-deploy" : "Deploy →"}
             </Button>
           )}
           {(build.status === "ready" || build.status === "deployed") && (
