@@ -116,5 +116,11 @@ export function useSpeechRecognition() {
     setIsListening(false);
   }, []);
 
-  return { isListening, transcript, error, startListening, stopListening };
+  return {
+    isListening: state.isListening,
+    transcript: state.transcript,
+    error: state.error,
+    startListening,
+    stopListening,
+  };
 }
