@@ -16,6 +16,7 @@ const ROLE_WIDGETS: Record<string, React.LazyExoticComponent<React.ComponentType
   merlin: lazy(() => import('@/components/agent-dashboards/MerlinWidgets')),
   kiro: lazy(() => import('@/components/agent-dashboards/KiroWidgets')),
   warbler: lazy(() => import('@/components/agent-dashboards/KiroWidgets')),
+  owl: lazy(() => import('@/components/agent-dashboards/OwlWidgets')),
 };
 
 function resolveWidgetKey(agent: { name: string; role: string }): string | null {
@@ -28,6 +29,7 @@ function resolveWidgetKey(agent: { name: string; role: string }): string | null 
   if (role.includes('architect')) return 'osprey';
   if (role.includes('project') || role.includes('tracker')) return 'merlin';
   if (role.includes('cloud') || role.includes('orchestrat')) return 'kiro';
+  if (role.includes('textbook') || role.includes('teaching') || role.includes('education')) return 'owl';
   return null;
 }
 
@@ -82,6 +84,7 @@ export default function KiroDashboardPage() {
     merlin: { name: 'Merlin', role: 'Project Tracker' },
     kiro: { name: 'Kiro', role: 'Cloud Orchestrator' },
     warbler: { name: 'Kiro', role: 'Cloud Orchestrator' },
+    owl: { name: 'Owl', role: 'Intelligent Textbook Agent' },
   };
 
   const displayAgent = agent

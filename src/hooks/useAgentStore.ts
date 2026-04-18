@@ -78,6 +78,17 @@ const DEFAULT_AGENTS: AgentConfig[] = [
     accentColor: "210 80% 55%",
     speakOrder: 5,
   },
+  {
+    id: "owl",
+    name: "Owl",
+    emoji: "🦉",
+    role: "Intelligent Textbook Agent",
+    voiceId: "ErXwobaYiN019PkySvjV",
+    agentId: "owl",
+    apiUrl: "",
+    accentColor: "30 80% 50%",
+    speakOrder: 6,
+  },
 ];
 
 function loadLocalState(): StoreState {
