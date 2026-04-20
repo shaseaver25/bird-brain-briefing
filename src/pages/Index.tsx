@@ -240,11 +240,57 @@ export default function Index({ userId }: IndexProps) {
                         setIsBroadcasting(true);
                         abortRef.current = false;
 
-                        // Step 1: Wren delivers the briefing
-                        const briefing = await handle.sendMeetingMessage(
-                          "__AUTO_BRIEFING__",
-                          ["[Meeting started — Wren delivers morning briefing]"]
-                        );
+                        // Step 1: Compile a fresh briefing from real data sources
+                        // (calendar, Gmail, SalesHawk leads, Kiro intel) and read it verbatim.
+                        // This avoids Wren hallucinating canned briefings each meeting.
+                        let briefing = "";
+                        try {
+                          // Fire wren-briefing to recompile
+                          await supabase.functions.invoke("wren-briefing", { body: {} });
+
+                          // Poll widget_data for the freshly compiled briefing (max ~30s)
+                          const startedAt = Date.now();
+                          for (let i = 0; i < 30; i++) {
+                            if (abortRef.current) break;
+                            const { data } = await supabase
+                              .from("widget_data")
+                              .select("data, updated_at")
+                              .eq("agent_id", "wren")
+                              .eq("widget_key", "morning_briefing")
+                              .maybeSingle();
+                            const compiledAtRaw = (data?.data as { compiled_at?: string } | null)?.compiled_at;
+                            const compiledAt = compiledAtRaw ? new Date(compiledAtRaw).getTime() : 0;
+                            if (data && compiledAt >= startedAt - 2000) {
+                              briefing = (data.data as { briefing?: string }).briefing ?? "";
+                              break;
+                            }
+                            await new Promise((r) => setTimeout(r, 1000));
+                          }
+
+                          // Fallback: use whatever's stored if polling didn't catch a fresh one
+                          if (!briefing) {
+                            const { data } = await supabase
+                              .from("widget_data")
+                              .select("data")
+                              .eq("agent_id", "wren")
+                              .eq("widget_key", "morning_briefing")
+                              .maybeSingle();
+                            briefing = (data?.data as { briefing?: string } | null)?.briefing ?? "";
+                          }
+                        } catch (e) {
+                          console.error("Failed to fetch fresh briefing:", e);
+                        }
+
+                        // If we still don't have a briefing, ask Wren to improvise
+                        if (!briefing) {
+                          briefing = await handle.sendMeetingMessage(
+                            "__AUTO_BRIEFING__",
+                            ["[Meeting started — Wren delivers morning briefing]"]
+                          );
+                        } else {
+                          // Show Wren's briefing in her panel without an extra Claude call
+                          await handle.sendMessage(`[BRIEFING DELIVERED]\n${briefing}`).catch(() => undefined);
+                        }
 
                         // Guard: don't propagate error strings or silences to other agents
                         const isError = (s: string) =>
