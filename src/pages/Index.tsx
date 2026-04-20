@@ -287,9 +287,6 @@ export default function Index({ userId }: IndexProps) {
                             "__AUTO_BRIEFING__",
                             ["[Meeting started — Wren delivers morning briefing]"]
                           );
-                        } else {
-                          // Show Wren's briefing in her panel without an extra Claude call
-                          await handle.sendMessage(`[BRIEFING DELIVERED]\n${briefing}`).catch(() => undefined);
                         }
 
                         // Guard: don't propagate error strings or silences to other agents
