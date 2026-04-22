@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useImperativeHandle, forwardRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Volume2 } from "lucide-react";
+import { Volume2, Send } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { textToSpeech } from "@/lib/elevenlabs";
 import { sendAgentMessage, getSessionId } from "@/lib/agent-api";
