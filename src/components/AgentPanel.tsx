@@ -255,6 +255,39 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
         )}
         <div ref={chatEndRef} />
       </div>
+
+      {/* Per-agent direct input — DM this agent without broadcasting */}
+      <form
+        className="border-t border-border p-2 flex items-center gap-2"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const text = directInput.trim();
+          if (!text || isThinking) return;
+          setDirectInput("");
+          const reply = await sendMessage(text);
+          if (reply && reply.trim() !== "---") {
+            speak(reply);
+          }
+        }}
+      >
+        <input
+          type="text"
+          value={directInput}
+          onChange={(e) => setDirectInput(e.target.value)}
+          placeholder={`Message ${agent.name}...`}
+          disabled={isThinking}
+          className="flex-1 bg-background border border-border rounded-md px-2 py-1.5 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary disabled:opacity-50"
+        />
+        <button
+          type="submit"
+          disabled={!directInput.trim() || isThinking}
+          className="p-1.5 rounded-md transition-colors disabled:opacity-30"
+          style={{ backgroundColor: `hsl(${agent.accentColor} / 0.15)`, color: accent }}
+          aria-label={`Send to ${agent.name}`}
+        >
+          <Send className="h-3.5 w-3.5" />
+        </button>
+      </form>
     </div>
   );
 });
