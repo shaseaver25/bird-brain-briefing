@@ -166,13 +166,9 @@ function LeadCard({ lead, business }: { lead: DailyFind; business: string }) {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  function handleGmail() {
-    if (!draft) return;
-    const to = lead.email ?? "";
-    const subject = encodeURIComponent(draft.subject);
-    const body = encodeURIComponent(draft.body);
-    window.open(`https://mail.google.com/mail/?view=cm&to=${to}&su=${subject}&body=${body}`, "_blank");
-  }
+  const gmailUrl = draft
+    ? `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(lead.email ?? "")}&su=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`
+    : "#";
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -234,9 +230,14 @@ function LeadCard({ lead, business }: { lead: DailyFind; business: string }) {
                 <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleCopy}>
                   {copied ? <><Check className="h-3 w-3 text-emerald-500" /> Copied</> : <><Copy className="h-3 w-3" /> Copy</>}
                 </Button>
-                <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleGmail}>
+                <a
+                  href={gmailUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 h-7 px-3 text-xs rounded-md border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
+                >
                   <Send className="h-3 w-3" /> Open in Gmail
-                </Button>
+                </a>
                 <Button size="sm" variant="ghost" className="h-7 text-xs ml-auto text-muted-foreground"
                   onClick={handleDraft}>
                   <RefreshCw className="h-3 w-3" /> Regenerate
