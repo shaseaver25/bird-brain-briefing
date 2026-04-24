@@ -1,9 +1,10 @@
 import { useState, useCallback, useRef, useImperativeHandle, forwardRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Volume2, Send, Paperclip, X } from "lucide-react";
+import { Volume2, Send, Paperclip, X, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { textToSpeech } from "@/lib/elevenlabs";
 import { sendAgentMessage, getSessionId } from "@/lib/agent-api";
+import { supabase } from "@/integrations/supabase/client";
 import { AgentConfig } from "@/hooks/useAgentStore";
 
 import merlinAvatar from "@/assets/merlin-avatar.png";
@@ -65,6 +66,79 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isThinking]);
+
+  // OpenClaw id → display name (must match agent-api.ts)
+  const NAME_MAP: Record<string, string> = {
+    main: "Wren",
+    forge: "Osprey",
+    saleshawk: "SalesHawk",
+    merlin: "Merlin",
+    kiro: "Kiro",
+    warbler: "Kiro",
+  };
+
+  // Load past 14 days of conversation history on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const aid = (agent.agentId || agent.id).toLowerCase();
+        const displayName = NAME_MAP[aid] || agent.name;
+        const { data: agentRow } = await (supabase
+          .from("agents" as any)
+          .select("id")
+          .ilike("name", displayName)
+          .single() as any);
+        if (!agentRow) return;
+        const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+        const { data } = await (supabase
+          .from("conversations" as any)
+          .select("role, content, created_at")
+          .eq("user_id", user.id)
+          .eq("agent_id", agentRow.id)
+          .gte("created_at", cutoff)
+          .order("created_at", { ascending: true })
+          .limit(60) as any);
+        if (cancelled || !data) return;
+        const history: ChatMessage[] = data.map((m: any) => ({
+          role: m.role === "user" ? "user" : "agent",
+          text: m.content,
+        }));
+        setMessages(history);
+      } catch (e) {
+        console.warn("Failed to load history for", agent.name, e);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agent.id]);
+
+  const clearHistory = useCallback(async () => {
+    if (!confirm(`Clear all chat history with ${agent.name}? This cannot be undone.`)) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const aid = (agent.agentId || agent.id).toLowerCase();
+      const displayName = NAME_MAP[aid] || agent.name;
+      const { data: agentRow } = await (supabase
+        .from("agents" as any)
+        .select("id")
+        .ilike("name", displayName)
+        .single() as any);
+      if (!agentRow) return;
+      await (supabase
+        .from("conversations" as any)
+        .delete()
+        .eq("user_id", user.id)
+        .eq("agent_id", agentRow.id) as any);
+      setMessages([]);
+    } catch (e) {
+      console.error("Failed to clear history:", e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agent.id, agent.name]);
 
   const sendMessage = useCallback(async (text: string): Promise<string> => {
     setMessages((prev) => [...prev, { role: "user", text }]);
