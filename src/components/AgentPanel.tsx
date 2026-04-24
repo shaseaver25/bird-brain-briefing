@@ -334,6 +334,14 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
             {isSpeaking && (
               <Volume2 className="h-4 w-4 animate-pulse" style={{ color: accent }} />
             )}
+            <button
+              onClick={clearHistory}
+              className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"
+              title={`Clear ${agent.name} chat history`}
+              aria-label={`Clear ${agent.name} chat history`}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
       </div>
