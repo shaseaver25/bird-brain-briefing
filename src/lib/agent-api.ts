@@ -114,16 +114,22 @@ async function loadHistory(agentId: string, sessionId: string): Promise<{ role: 
   const { data: agent } = await (supabase.from("agents" as any).select("id").ilike("name", displayName).single() as any);
   if (!agent) return [];
 
+  // Load up to 40 most recent messages across all sessions in the last 14 days,
+  // so the agent has cross-session memory. Older rows are auto-purged by cron.
+  const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
   const { data } = await (supabase
     .from("conversations" as any)
     .select("role, content")
     .eq("user_id", user.id)
     .eq("agent_id", agent.id)
-    .eq("session_id", sessionId)
-    .order("created_at", { ascending: true })
-    .limit(20) as any);
+    .gte("created_at", cutoff)
+    .order("created_at", { ascending: false })
+    .limit(40) as any);
 
-  return (data ?? []).map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content }));
+  // Reverse to chronological order for the model
+  return (data ?? [])
+    .map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content }))
+    .reverse();
 }
 
 async function saveHistory(agentId: string, sessionId: string, userMsg: string, assistantMsg: string) {
@@ -149,7 +155,14 @@ async function callLegacy(apiUrl: string, agentId: string, message: string): Pro
     body: JSON.stringify({ agent: agentId, message }),
   });
   const data = await res.json();
-  return { response: data.response || data.message || data.text || JSON.stringify(data), agentId };
+  const response = data.response || data.message || data.text || JSON.stringify(data);
+  // Persist legacy conversations too, so the per-agent history view & 14-day memory work
+  try {
+    await saveHistory(agentId, getSessionId(), message, response);
+  } catch (e) {
+    console.warn("Failed to save legacy conversation:", e);
+  }
+  return { response, agentId };
 }
 
 // ── MCP backend (Claude API direct from browser) ───────────────
