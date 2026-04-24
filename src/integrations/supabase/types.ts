@@ -663,6 +663,7 @@ export type Database = {
     }
     Functions: {
       exec_agent_migration: { Args: { _build_id: string }; Returns: Json }
+      purge_old_conversations: { Args: never; Returns: undefined }
     }
     Enums: {
       memory_type: "fact" | "preference" | "learned" | "instruction"
