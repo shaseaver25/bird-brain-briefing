@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useImperativeHandle, forwardRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Volume2, Send } from "lucide-react";
+import { Volume2, Send, Paperclip, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { textToSpeech } from "@/lib/elevenlabs";
 import { sendAgentMessage, getSessionId } from "@/lib/agent-api";
@@ -30,6 +30,7 @@ function getAvatar(agent: { id: string; name: string }): string | undefined {
 interface ChatMessage {
   role: "user" | "agent";
   text: string;
+  attachments?: { name: string; kind: "image" | "file"; dataUrl?: string }[];
 }
 
 interface AgentPanelProps {
@@ -55,6 +56,8 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
   const [isThinking, setIsThinking] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [directInput, setDirectInput] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<{ name: string; kind: "image" | "file"; dataUrl?: string; textContent?: string }[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const abortSpeakRef = useRef(false);
@@ -169,6 +172,51 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
 
   const accent = `hsl(${agent.accentColor})`;
 
+  const readFileAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(file);
+    });
+
+  const readFileAsText = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = () => reject(r.error);
+      r.readAsText(file);
+    });
+
+  const handleFiles = async (files: FileList | null) => {
+    if (!files) return;
+    const MAX_BYTES = 5 * 1024 * 1024;
+    const next: typeof pendingFiles = [];
+    for (const file of Array.from(files)) {
+      if (file.size > MAX_BYTES) {
+        console.warn(`Skipping ${file.name}: exceeds 5MB`);
+        continue;
+      }
+      const isImage = file.type.startsWith("image/");
+      if (isImage) {
+        const dataUrl = await readFileAsDataUrl(file);
+        next.push({ name: file.name, kind: "image", dataUrl });
+      } else {
+        const isTextLike =
+          file.type.startsWith("text/") ||
+          /json|xml|csv|yaml|javascript|typescript|markdown/.test(file.type) ||
+          /\.(txt|md|json|csv|yaml|yml|xml|log|js|ts|tsx|jsx|py|html|css)$/i.test(file.name);
+        if (isTextLike) {
+          const textContent = await readFileAsText(file);
+          next.push({ name: file.name, kind: "file", textContent });
+        } else {
+          next.push({ name: file.name, kind: "file" });
+        }
+      }
+    }
+    setPendingFiles((prev) => [...prev, ...next]);
+  };
+
   return (
     <div
       className="flex flex-col rounded-lg border border-border bg-card overflow-hidden h-full"
@@ -237,6 +285,27 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
                 {msg.role === "user" ? "You" : agent.name}
               </span>
               {msg.text}
+              {msg.attachments && msg.attachments.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {msg.attachments.map((att, j) =>
+                    att.kind === "image" && att.dataUrl ? (
+                      <img
+                        key={j}
+                        src={att.dataUrl}
+                        alt={att.name}
+                        className="max-h-32 rounded border border-border"
+                      />
+                    ) : (
+                      <span
+                        key={j}
+                        className="text-[10px] font-mono px-2 py-1 rounded bg-background border border-border"
+                      >
+                        📎 {att.name}
+                      </span>
+                    )
+                  )}
+                </div>
+              )}
             </motion.div>
           ))}
         </AnimatePresence>
@@ -256,20 +325,111 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
         <div ref={chatEndRef} />
       </div>
 
+      {/* Pending attachments preview */}
+      {pendingFiles.length > 0 && (
+        <div className="border-t border-border px-2 pt-2 flex flex-wrap gap-2">
+          {pendingFiles.map((f, i) => (
+            <div
+              key={i}
+              className="relative flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded bg-muted border border-border"
+            >
+              {f.kind === "image" && f.dataUrl ? (
+                <img src={f.dataUrl} alt={f.name} className="h-8 w-8 object-cover rounded" />
+              ) : (
+                <span>📎</span>
+              )}
+              <span className="max-w-[120px] truncate">{f.name}</span>
+              <button
+                type="button"
+                onClick={() => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}
+                className="ml-1 opacity-60 hover:opacity-100"
+                aria-label={`Remove ${f.name}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Per-agent direct input — DM this agent without broadcasting */}
       <form
         className="border-t border-border p-2 flex items-center gap-2"
         onSubmit={async (e) => {
           e.preventDefault();
           const text = directInput.trim();
-          if (!text || isThinking) return;
+          if ((!text && pendingFiles.length === 0) || isThinking) return;
+
+          const attachments = pendingFiles.map((f) => ({ name: f.name, kind: f.kind, dataUrl: f.dataUrl }));
+
+          // Build the outbound message: include extracted text from text files,
+          // and notes for image/binary attachments by name.
+          let outbound = text;
+          const textParts: string[] = [];
+          const imageNames: string[] = [];
+          const fileNames: string[] = [];
+          for (const f of pendingFiles) {
+            if (f.kind === "image") imageNames.push(f.name);
+            else if (f.textContent) textParts.push(`--- FILE: ${f.name} ---\n${f.textContent}\n--- END FILE ---`);
+            else fileNames.push(f.name);
+          }
+          if (imageNames.length) outbound += `\n\n[User attached image(s): ${imageNames.join(", ")}]`;
+          if (fileNames.length) outbound += `\n\n[User attached file(s) I cannot read: ${fileNames.join(", ")}]`;
+          if (textParts.length) outbound += `\n\n${textParts.join("\n\n")}`;
+
           setDirectInput("");
-          const reply = await sendMessage(text);
+          setPendingFiles([]);
+
+          const userDisplayText = text || "(attachment)";
+          setMessages((prev) => [...prev, { role: "user", text: userDisplayText, attachments }]);
+          setIsThinking(true);
+          let reply = "";
+          try {
+            const result = await sendAgentMessage(
+              {
+                agentId: agent.agentId || agent.id,
+                message: outbound || "(see attachment)",
+                sessionId: getSessionId(),
+              },
+              agent.apiUrl || undefined,
+              anthropicKey || apiKey || undefined
+            );
+            reply = result.response;
+            setMessages((prev) => [...prev, { role: "agent", text: reply }]);
+          } catch (err) {
+            console.error("Agent error:", err);
+            reply = "Connection error. Please try again.";
+            setMessages((prev) => [...prev, { role: "agent", text: reply }]);
+          } finally {
+            setIsThinking(false);
+          }
           if (reply && reply.trim() !== "---") {
             speak(reply);
           }
         }}
       >
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*,text/*,.txt,.md,.json,.csv,.yaml,.yml,.xml,.log,.pdf,.doc,.docx"
+          className="hidden"
+          onChange={(e) => {
+            handleFiles(e.target.files);
+            if (fileInputRef.current) fileInputRef.current.value = "";
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isThinking}
+          className="p-1.5 rounded-md transition-colors hover:bg-muted disabled:opacity-30"
+          style={{ color: accent }}
+          aria-label="Attach file or image"
+          title="Attach file or image (5MB max)"
+        >
+          <Paperclip className="h-3.5 w-3.5" />
+        </button>
         <input
           type="text"
           value={directInput}
@@ -280,7 +440,7 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
         />
         <button
           type="submit"
-          disabled={!directInput.trim() || isThinking}
+          disabled={(!directInput.trim() && pendingFiles.length === 0) || isThinking}
           className="p-1.5 rounded-md transition-colors disabled:opacity-30"
           style={{ backgroundColor: `hsl(${agent.accentColor} / 0.15)`, color: accent }}
           aria-label={`Send to ${agent.name}`}
