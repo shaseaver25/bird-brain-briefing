@@ -434,6 +434,29 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
           type="text"
           value={directInput}
           onChange={(e) => setDirectInput(e.target.value)}
+          onPaste={async (e) => {
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            const files: File[] = [];
+            for (const item of Array.from(items)) {
+              if (item.kind === "file") {
+                const f = item.getAsFile();
+                if (f && f.type.startsWith("image/")) files.push(f);
+              }
+            }
+            if (files.length > 0) {
+              e.preventDefault();
+              const dt = new DataTransfer();
+              files.forEach((f) => {
+                // Give pasted images a friendly name if blank
+                const named = f.name && f.name !== "image.png"
+                  ? f
+                  : new File([f], `pasted-${Date.now()}.${(f.type.split("/")[1] || "png")}`, { type: f.type });
+                dt.items.add(named);
+              });
+              await handleFiles(dt.files);
+            }
+          }}
           placeholder={`Message ${agent.name}...`}
           disabled={isThinking}
           className="flex-1 bg-background border border-border rounded-md px-2 py-1.5 text-xs font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary disabled:opacity-50"
