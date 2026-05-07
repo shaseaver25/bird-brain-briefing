@@ -11,6 +11,7 @@ import StaffMeetingPage from "./pages/StaffMeetingPage";
 import KiroDashboardPage from "./pages/KiroDashboardPage";
 import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
+import GlobalVoiceStop from "./components/GlobalVoiceStop";
 
 const queryClient = new QueryClient();
 
@@ -55,6 +56,7 @@ const App = () => (
           <Route path="/dashboard/:agentId" element={<AuthGate><KiroDashboardPage /></AuthGate>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
+        <GlobalVoiceStop />
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
