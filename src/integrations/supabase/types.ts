@@ -545,6 +545,69 @@ export type Database = {
         }
         Relationships: []
       }
+      merlin_action_items: {
+        Row: {
+          context: string | null
+          created_at: string
+          due_date: string | null
+          id: string
+          source: string
+          source_meeting_date: string | null
+          source_meeting_id: string | null
+          source_meeting_title: string | null
+          status: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          context?: string | null
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          source?: string
+          source_meeting_date?: string | null
+          source_meeting_id?: string | null
+          source_meeting_title?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          context?: string | null
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          source?: string
+          source_meeting_date?: string | null
+          source_meeting_id?: string | null
+          source_meeting_title?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      merlin_scan_state: {
+        Row: {
+          last_scan_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          last_scan_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          last_scan_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       owl_topics: {
         Row: {
           active: boolean
