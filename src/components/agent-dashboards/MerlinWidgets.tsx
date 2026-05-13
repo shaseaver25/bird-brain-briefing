@@ -12,6 +12,8 @@ import {
   Loader2,
   AlertCircle,
   RefreshCw,
+  Sparkles,
+  X,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -394,6 +396,9 @@ export default function MerlinWidgets() {
         </Button>
       </div>
 
+      {/* Action items pulled from meeting notes */}
+      <MeetingActionItemsWidget />
+
       {/* Hackathon hero */}
       {hackathon && (
         <HackathonWidget
@@ -410,5 +415,139 @@ export default function MerlinWidgets() {
       {/* Deadline timeline */}
       <TimelineWidget projects={projects} />
     </div>
+  );
+}
+
+// ── Meeting Action Items Widget ───────────────────────────────────────────────
+
+interface ActionItem {
+  id: string;
+  title: string;
+  context: string | null;
+  due_date: string | null;
+  status: "todo" | "in_progress" | "done";
+  source_meeting_title: string | null;
+  source_meeting_date: string | null;
+  created_at: string;
+}
+
+function MeetingActionItemsWidget() {
+  const [items, setItems] = useState<ActionItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [scanning, setScanning] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function load() {
+    const { data } = await (supabase
+      .from("merlin_action_items" as any)
+      .select("*")
+      .order("status", { ascending: true })
+      .order("created_at", { ascending: false })
+      .limit(50) as any);
+    setItems((data ?? []) as ActionItem[]);
+    setLoading(false);
+  }
+
+  async function scan() {
+    setScanning(true);
+    setMsg(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("merlin-extract-actions");
+      if (error) throw error;
+      setMsg(`Scanned ${data?.scanned ?? 0} meetings — added ${data?.added ?? 0} action item${data?.added === 1 ? "" : "s"}.`);
+      await load();
+    } catch (e) {
+      setMsg(`Scan failed: ${String(e)}`);
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  async function cycle(item: ActionItem) {
+    const next: ActionItem["status"] = item.status === "todo" ? "in_progress" : item.status === "in_progress" ? "done" : "todo";
+    await (supabase.from("merlin_action_items" as any) as any).update({ status: next, updated_at: new Date().toISOString() }).eq("id", item.id);
+    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, status: next } : i)));
+  }
+
+  async function remove(id: string) {
+    await (supabase.from("merlin_action_items" as any) as any).delete().eq("id", id);
+    setItems((prev) => prev.filter((i) => i.id !== id));
+  }
+
+  useEffect(() => { load(); }, []);
+
+  const open = items.filter((i) => i.status !== "done");
+  const done = items.filter((i) => i.status === "done").slice(0, 5);
+
+  return (
+    <Card className="border-amber-500/30">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-amber-500" />
+            From Your Meetings
+          </CardTitle>
+          <button
+            onClick={scan}
+            disabled={scanning}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition-colors disabled:opacity-40"
+          >
+            <RefreshCw className={`h-3 w-3 ${scanning ? "animate-spin" : ""}`} />
+            {scanning ? "Scanning…" : "Scan Notes"}
+          </button>
+        </div>
+        <CardDescription>
+          {msg ?? `${open.length} open action item${open.length === 1 ? "" : "s"} pulled from your Granola notes.`}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {loading ? (
+          <div className="h-12 rounded bg-muted animate-pulse" />
+        ) : open.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-3">
+            Nothing yet. Click <span className="font-mono">Scan Notes</span> to pull next steps from recent meetings.
+          </p>
+        ) : (
+          open.map((item) => {
+            const cfg = TASK_STATUS_CONFIG[item.status];
+            const Icon = cfg.icon;
+            return (
+              <div key={item.id} className="flex items-start gap-2 p-2 rounded-md hover:bg-muted/50 transition-colors group">
+                <button onClick={() => cycle(item)} className="mt-0.5">
+                  <Icon className={`h-4 w-4 shrink-0 ${cfg.color} ${item.status === "in_progress" ? "animate-spin" : ""}`} />
+                </button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">{item.title}</p>
+                  {item.context && <p className="text-xs text-muted-foreground">{item.context}</p>}
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    {item.source_meeting_title}
+                    {item.source_meeting_date && <> · {new Date(item.source_meeting_date).toLocaleDateString()}</>}
+                  </p>
+                </div>
+                {item.due_date && (
+                  <span className="text-[10px] text-muted-foreground font-mono shrink-0 mt-0.5">
+                    {new Date(item.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </span>
+                )}
+                <button onClick={() => remove(item.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            );
+          })
+        )}
+        {done.length > 0 && (
+          <div className="pt-3 mt-3 border-t border-border space-y-1">
+            <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Recently done</p>
+            {done.map((d) => (
+              <div key={d.id} className="flex items-center gap-2 text-xs text-muted-foreground">
+                <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                <span className="line-through">{d.title}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
