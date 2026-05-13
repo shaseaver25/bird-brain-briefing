@@ -455,6 +455,54 @@ export type Database = {
         }
         Relationships: []
       }
+      legislation_items: {
+        Row: {
+          bill_id: string | null
+          id: string
+          jurisdiction: string
+          last_action: string | null
+          last_action_date: string | null
+          level: string
+          scanned_at: string
+          source: string | null
+          status: string | null
+          summary: string | null
+          title: string
+          topic: string
+          url: string | null
+        }
+        Insert: {
+          bill_id?: string | null
+          id?: string
+          jurisdiction: string
+          last_action?: string | null
+          last_action_date?: string | null
+          level: string
+          scanned_at?: string
+          source?: string | null
+          status?: string | null
+          summary?: string | null
+          title: string
+          topic: string
+          url?: string | null
+        }
+        Update: {
+          bill_id?: string | null
+          id?: string
+          jurisdiction?: string
+          last_action?: string | null
+          last_action_date?: string | null
+          level?: string
+          scanned_at?: string
+          source?: string | null
+          status?: string | null
+          summary?: string | null
+          title?: string
+          topic?: string
+          url?: string | null
+        }
+        Relationships: []
+      }
       mcp_tools: {
         Row: {
           auth_config: Json
@@ -494,6 +542,30 @@ export type Database = {
           last_health_check?: string | null
           name?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      owl_topics: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          topic: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          topic: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          topic?: string
+          user_id?: string
         }
         Relationships: []
       }
