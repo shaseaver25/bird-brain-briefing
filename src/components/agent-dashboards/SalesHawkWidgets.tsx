@@ -457,10 +457,6 @@ function FollowUpQueueWidget() {
 }
 
 export default function SalesHawkWidgets() {
-  return _Render();
-}
-
-function _Render() {
   return (
     <div className="space-y-6">
       <TodaysFindsWidget />
