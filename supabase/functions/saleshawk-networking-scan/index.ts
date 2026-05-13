@@ -60,7 +60,9 @@ Deno.serve(async (req) => {
 
     // Get last scan
     const { data: state } = await userClient.from("saleshawk_scan_state").select("last_scan_at").eq("user_id", user.id).maybeSingle();
-    const lastScan = state?.last_scan_at ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const lastScan = new Date(state?.last_scan_at ?? Date.now() - 7 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .replace(/\.\d{3}Z$/, "Z");
 
     // Fetch Granola notes since last_scan
     const url = `${GRANOLA_GATEWAY}/v1/notes?limit=50&created_after=${encodeURIComponent(lastScan)}`;
