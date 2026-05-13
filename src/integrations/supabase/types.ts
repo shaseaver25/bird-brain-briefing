@@ -655,6 +655,87 @@ export type Database = {
         }
         Relationships: []
       }
+      saleshawk_networking_queue: {
+        Row: {
+          ai_reasoning: string | null
+          ai_suggested_business: string | null
+          attendee_company: string | null
+          attendee_email: string | null
+          attendee_name: string
+          attendee_title: string | null
+          confirmed_business: string | null
+          created_at: string
+          crm_action: string | null
+          crm_error: string | null
+          granola_meeting_id: string | null
+          id: string
+          meeting_date: string | null
+          meeting_notes: string | null
+          meeting_title: string | null
+          resolved_at: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          ai_reasoning?: string | null
+          ai_suggested_business?: string | null
+          attendee_company?: string | null
+          attendee_email?: string | null
+          attendee_name: string
+          attendee_title?: string | null
+          confirmed_business?: string | null
+          created_at?: string
+          crm_action?: string | null
+          crm_error?: string | null
+          granola_meeting_id?: string | null
+          id?: string
+          meeting_date?: string | null
+          meeting_notes?: string | null
+          meeting_title?: string | null
+          resolved_at?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          ai_reasoning?: string | null
+          ai_suggested_business?: string | null
+          attendee_company?: string | null
+          attendee_email?: string | null
+          attendee_name?: string
+          attendee_title?: string | null
+          confirmed_business?: string | null
+          created_at?: string
+          crm_action?: string | null
+          crm_error?: string | null
+          granola_meeting_id?: string | null
+          id?: string
+          meeting_date?: string | null
+          meeting_notes?: string | null
+          meeting_title?: string | null
+          resolved_at?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      saleshawk_scan_state: {
+        Row: {
+          last_scan_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          last_scan_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          last_scan_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       shared_context: {
         Row: {
           content: string
