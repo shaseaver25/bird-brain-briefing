@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { DollarSign, TrendingUp, Users, Clock, AlertCircle, Target, Zap, RefreshCw, Linkedin, Mail, Copy, Check, Send, ChevronDown, ChevronUp } from "lucide-react";
+import { DollarSign, TrendingUp, Users, Clock, AlertCircle, Target, Zap, RefreshCw, Linkedin, Mail, Copy, Check, Send, ChevronDown, ChevronUp, Network, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 // --- Types ---
@@ -460,6 +460,7 @@ export default function SalesHawkWidgets() {
   return (
     <div className="space-y-6">
       <TodaysFindsWidget />
+      <NetworkingWidget />
       {/* Deal Values, Pipeline Funnel, and Follow-Up Queue are hidden until
           they're wired to real CRM data. See DealValuesWidget, PipelineFunnelWidget,
           FollowUpQueueWidget above — kept in the file for future re-enablement. */}
