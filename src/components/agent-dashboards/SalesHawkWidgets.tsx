@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { DollarSign, TrendingUp, Users, Clock, AlertCircle, Target, Zap, RefreshCw, Linkedin, Mail, Copy, Check, Send, ChevronDown, ChevronUp } from "lucide-react";
+import { DollarSign, TrendingUp, Users, Clock, AlertCircle, Target, Zap, RefreshCw, Linkedin, Mail, Copy, Check, Send, ChevronDown, ChevronUp, Network, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 // --- Types ---
@@ -460,9 +460,183 @@ export default function SalesHawkWidgets() {
   return (
     <div className="space-y-6">
       <TodaysFindsWidget />
+      <NetworkingWidget />
       {/* Deal Values, Pipeline Funnel, and Follow-Up Queue are hidden until
           they're wired to real CRM data. See DealValuesWidget, PipelineFunnelWidget,
           FollowUpQueueWidget above — kept in the file for future re-enablement. */}
     </div>
+  );
+}
+
+// --- Networking Widget (meeting-driven CRM sync) ---
+
+interface QueueRow {
+  id: string;
+  granola_meeting_id: string | null;
+  meeting_title: string | null;
+  meeting_date: string | null;
+  attendee_name: string;
+  attendee_email: string | null;
+  attendee_company: string | null;
+  attendee_title: string | null;
+  meeting_notes: string | null;
+  ai_suggested_business: string | null;
+  ai_reasoning: string | null;
+  status: string;
+  confirmed_business: string | null;
+  crm_action: string | null;
+  crm_error: string | null;
+  created_at: string;
+}
+
+function NetworkingWidget() {
+  const [items, setItems] = useState<QueueRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [scanning, setScanning] = useState(false);
+  const [scanMsg, setScanMsg] = useState<string | null>(null);
+
+  async function load() {
+    const { data } = await (supabase
+      .from("saleshawk_networking_queue" as any)
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(50) as any);
+    setItems((data ?? []) as QueueRow[]);
+    setLoading(false);
+  }
+
+  async function runScan() {
+    setScanning(true);
+    setScanMsg(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("saleshawk-networking-scan");
+      if (error) throw error;
+      setScanMsg(`Scanned ${data?.scanned ?? 0} meetings, queued ${data?.queued ?? 0} contacts.`);
+      await load();
+    } catch (e) {
+      setScanMsg(`Scan failed: ${String(e)}`);
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  async function commit(queueId: string, business: string | null, action: "confirm" | "skip") {
+    const { error } = await supabase.functions.invoke("saleshawk-networking-commit", {
+      body: { queueId, business, action: action === "skip" ? "skip" : "confirm" },
+    });
+    if (error) console.error(error);
+    await load();
+  }
+
+  useEffect(() => { load(); }, []);
+
+  const pending = items.filter((i) => i.status === "pending");
+  const recent = items.filter((i) => i.status !== "pending").slice(0, 10);
+
+  return (
+    <Card className="border-blue-500/30">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Network className="h-5 w-5 text-blue-500" />
+            Networking — Meeting → CRM
+          </CardTitle>
+          <button
+            onClick={runScan}
+            disabled={scanning}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 transition-colors disabled:opacity-40"
+          >
+            <RefreshCw className={`h-3 w-3 ${scanning ? "animate-spin" : ""}`} />
+            {scanning ? "Scanning…" : "Scan Meetings"}
+          </button>
+        </div>
+        <CardDescription>
+          {scanMsg ?? `${pending.length} contact${pending.length === 1 ? "" : "s"} awaiting CRM placement.`}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {loading ? (
+          <div className="h-16 rounded bg-muted animate-pulse" />
+        ) : pending.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-4">
+            No pending contacts. Click <span className="font-mono">Scan Meetings</span> to pull from Granola.
+          </p>
+        ) : (
+          pending.map((q) => (
+            <div key={q.id} className="rounded-lg border border-border bg-card p-3 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{q.attendee_name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {[q.attendee_title, q.attendee_company].filter(Boolean).join(" · ")}
+                    {q.attendee_email && <> · <span className="font-mono">{q.attendee_email}</span></>}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    From: <span className="italic">{q.meeting_title}</span>
+                    {q.meeting_date && <> · {new Date(q.meeting_date).toLocaleDateString()}</>}
+                  </p>
+                </div>
+                <button
+                  onClick={() => commit(q.id, null, "skip")}
+                  className="text-muted-foreground hover:text-destructive p-1"
+                  title="Skip"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              {q.ai_reasoning && (
+                <p className="text-[11px] text-muted-foreground italic">AI: {q.ai_reasoning}</p>
+              )}
+              <div className="flex items-center gap-2 flex-wrap pt-1">
+                <span className="text-[10px] text-muted-foreground font-mono uppercase">Add to:</span>
+                {(["realpath", "tailoredu", "aiwhisperers"] as const).map((biz) => {
+                  const isSuggested = q.ai_suggested_business === biz;
+                  return (
+                    <Button
+                      key={biz}
+                      size="sm"
+                      variant={isSuggested ? "default" : "outline"}
+                      className={`h-7 text-xs ${isSuggested ? "" : BUSINESS_COLORS[biz]}`}
+                      onClick={() => commit(q.id, biz, "confirm")}
+                    >
+                      {BUSINESS_LABELS[biz]}{isSuggested ? " ★" : ""}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+          ))
+        )}
+
+        {recent.length > 0 && (
+          <div className="pt-3 mt-3 border-t border-border">
+            <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-2">Recent</p>
+            <div className="space-y-1">
+              {recent.map((r) => (
+                <div key={r.id} className="flex items-center gap-2 text-xs py-1">
+                  {r.status === "confirmed" ? (
+                    <Check className="h-3 w-3 text-emerald-500 shrink-0" />
+                  ) : r.status === "skipped" ? (
+                    <X className="h-3 w-3 text-muted-foreground shrink-0" />
+                  ) : (
+                    <AlertCircle className="h-3 w-3 text-destructive shrink-0" />
+                  )}
+                  <span className="font-medium">{r.attendee_name}</span>
+                  {r.confirmed_business && (
+                    <span className={`font-mono text-[10px] ${BUSINESS_COLORS[r.confirmed_business]}`}>
+                      → {BUSINESS_LABELS[r.confirmed_business]}
+                    </span>
+                  )}
+                  {r.crm_action && (
+                    <span className="text-[10px] text-muted-foreground">({r.crm_action})</span>
+                  )}
+                  {r.crm_error && <span className="text-[10px] text-destructive">{r.crm_error}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
