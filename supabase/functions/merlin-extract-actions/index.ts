@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
     if (!user) return new Response(JSON.stringify({ error: "unauthenticated" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const { data: state } = await userClient.from("merlin_scan_state").select("last_scan_at").eq("user_id", user.id).maybeSingle();
-    const lastScan = state?.last_scan_at ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const lastScan = new Date(state?.last_scan_at ?? Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
     const url = `${GRANOLA_GATEWAY}/v1/notes?limit=50&created_after=${encodeURIComponent(lastScan)}`;
     const notesRes = await fetch(url, {
