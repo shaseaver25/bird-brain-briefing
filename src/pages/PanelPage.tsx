@@ -94,14 +94,19 @@ export default function PanelPage() {
   const partialRef = useRef("");
   const lastSubmittedRef = useRef("");
   const finishTimerRef = useRef<number | null>(null);
+  const silenceTimerRef = useRef<number | null>(null);
   const finishRequestedRef = useRef(false);
+  const commitRef = useRef<() => void>(() => {});
   panelistsRef.current = panelists;
 
   useEffect(() => {
     return () => {
       if (finishTimerRef.current) window.clearTimeout(finishTimerRef.current);
+      if (silenceTimerRef.current) window.clearTimeout(silenceTimerRef.current);
     };
   }, []);
+
+  const SILENCE_MS = 2500;
 
   const panelistKeyterms = useMemo(
     () => [...new Set(panelists.flatMap((p) => [p.name, ...panelistNameVariants(p.name)]))],
