@@ -143,6 +143,8 @@ export default function PanelPage() {
   const handleCommittedRef = useRef(handleCommitted);
   handleCommittedRef.current = handleCommitted;
 
+  const stopMicRef = useRef<() => void>(() => {});
+
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
     commitStrategy: "vad" as any,
@@ -150,12 +152,24 @@ export default function PanelPage() {
     onCommittedTranscript: (d) => {
       setPartial("");
       handleCommittedRef.current(d.text);
+      // Auto-stop mic after the question is captured so the panelist can answer
+      stopMicRef.current();
     },
     onError: (e) => {
       console.error("[panel] scribe error:", e);
       toast.error((e as Error)?.message || "Transcription error");
     },
   });
+
+  const stopMic = useCallback(() => {
+    scribe.disconnect();
+    if (audioRef.current) audioRef.current.pause();
+    setActiveAgentId(null);
+    setThinkingAgentId(null);
+    setPartial("");
+  }, [scribe]);
+
+  stopMicRef.current = stopMic;
 
   const startMic = useCallback(async () => {
     setStarting(true);
@@ -174,14 +188,6 @@ export default function PanelPage() {
     } finally {
       setStarting(false);
     }
-  }, [scribe]);
-
-  const stopMic = useCallback(() => {
-    scribe.disconnect();
-    if (audioRef.current) audioRef.current.pause();
-    setActiveAgentId(null);
-    setThinkingAgentId(null);
-    setPartial("");
   }, [scribe]);
 
   const colorFor = useMemo(() => {
