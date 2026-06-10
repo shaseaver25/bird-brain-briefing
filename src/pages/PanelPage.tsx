@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Mic, MicOff, Loader2 } from "lucide-react";
+import { Mic, MicOff, Loader2, Hand } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useScribe } from "@elevenlabs/react";
 
@@ -89,6 +89,9 @@ export default function PanelPage() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [starting, setStarting] = useState(false);
   const [finishing, setFinishing] = useState(false);
+  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
+  const [raisedHands, setRaisedHands] = useState<Set<string>>(new Set());
+  const [raising, setRaising] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const panelistsRef = useRef<Panelist[]>([]);
   const partialRef = useRef("");
@@ -97,7 +100,11 @@ export default function PanelPage() {
   const silenceTimerRef = useRef<number | null>(null);
   const finishRequestedRef = useRef(false);
   const commitRef = useRef<() => void>(() => {});
+  const pendingQuestionRef = useRef<string | null>(null);
+  const raisedHandsRef = useRef<Set<string>>(new Set());
   panelistsRef.current = panelists;
+  pendingQuestionRef.current = pendingQuestion;
+  raisedHandsRef.current = raisedHands;
 
   useEffect(() => {
     return () => {
@@ -145,6 +152,9 @@ export default function PanelPage() {
         ...t,
         { id: crypto.randomUUID(), agentId, agentName, question, answer: data.text },
       ]);
+      // Clear the pending question / raised hands once someone has answered
+      setPendingQuestion(null);
+      setRaisedHands(new Set());
 
       if (audioRef.current) {
         audioRef.current.pause();
@@ -161,6 +171,29 @@ export default function PanelPage() {
     }
   }, []);
 
+  const raiseHands = useCallback(async (question: string) => {
+    setRaising(true);
+    setRaisedHands(new Set());
+    try {
+      const { data, error } = await supabase.functions.invoke("panel-raise", {
+        body: { question },
+      });
+      if (error) throw error;
+      const ids: string[] = Array.isArray(data?.interestedIds) ? data.interestedIds : [];
+      setRaisedHands(new Set(ids));
+      if (ids.length === 0) {
+        toast("No panelist raised a hand — try calling someone by name");
+      } else {
+        toast.success("Hands raised — call on someone by name");
+      }
+    } catch (e) {
+      console.error("[panel] raise error:", e);
+      toast.error((e as Error).message || "Could not poll panelists");
+    } finally {
+      setRaising(false);
+    }
+  }, []);
+
   const handleCommitted = useCallback(
     (text: string) => {
       const cleanText = text?.trim();
@@ -168,18 +201,26 @@ export default function PanelPage() {
       if (lastSubmittedRef.current === cleanText) return true;
       console.log("[panel] committed text:", cleanText);
       const match = matchPanelist(cleanText, panelistsRef.current);
+      const pending = pendingQuestionRef.current;
       if (!match) {
-        toast("No panelist named — try starting with a name", {
-          description: cleanText,
-        });
-        return false;
+        // Open question — ask the panel who wants to chime in
+        lastSubmittedRef.current = cleanText;
+        setPendingQuestion(cleanText);
+        setLastQuestion({ name: "Panel", text: cleanText });
+        raiseHands(cleanText);
+        return true;
       }
       lastSubmittedRef.current = cleanText;
-      console.log("[panel] matched:", match.panelist.name, "question:", match.rest);
-      askPanelist(match.panelist.id, match.panelist.name, match.rest);
+      // If there's a pending open question, route it to the named panelist
+      // (use the pending question rather than whatever short "rest" the moderator said)
+      const question = pending && (!match.rest || match.rest.split(/\s+/).length < 3)
+        ? pending
+        : match.rest;
+      console.log("[panel] matched:", match.panelist.name, "question:", question);
+      askPanelist(match.panelist.id, match.panelist.name, question);
       return true;
     },
-    [askPanelist],
+    [askPanelist, raiseHands],
   );
 
   const handleCommittedRef = useRef(handleCommitted);
@@ -374,7 +415,13 @@ export default function PanelPage() {
         )}
 
         <Card className="p-4 min-h-[80px]">
-          <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Live</div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-2">
+            <span>Live</span>
+            {raising && <Loader2 className="h-3 w-3 animate-spin" />}
+            {pendingQuestion && !raising && (
+              <span className="text-primary normal-case">· awaiting a name</span>
+            )}
+          </div>
           {partial ? (
             <p className="text-base italic text-foreground/80">{partial}…</p>
           ) : lastQuestion ? (
