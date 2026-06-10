@@ -171,6 +171,25 @@ export default function PanelPage() {
 
   stopMicRef.current = stopMic;
 
+  const startMic = useCallback(async () => {
+    setStarting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("elevenlabs-scribe-token");
+      if (error) throw error;
+      if (!data?.token) throw new Error("No token from server");
+      await scribe.connect({
+        token: data.token,
+        microphone: { echoCancellation: true, noiseSuppression: true } as any,
+      });
+      toast.success("Mic on — ask a panelist by name");
+    } catch (e) {
+      console.error("[panel] startMic error:", e);
+      toast.error((e as Error).message || "Could not start mic");
+    } finally {
+      setStarting(false);
+    }
+  }, [scribe]);
+
   const colorFor = useMemo(() => {
     const map = new Map<string, string>();
     panelists.forEach((p, i) => map.set(p.id, PANEL_COLORS[i % PANEL_COLORS.length]));
