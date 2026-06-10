@@ -254,8 +254,12 @@ export default function PanelPage() {
             </p>
           </div>
           {scribe.isConnected ? (
-            <Button onClick={stopMic} variant="destructive" size="lg">
-              <MicOff className="mr-2 h-4 w-4" /> Stop mic
+            <Button onClick={finishQuestion} disabled={finishing} variant="destructive" size="lg">
+              {finishing ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Finishing…</>
+              ) : (
+                <><MicOff className="mr-2 h-4 w-4" /> Finish question</>
+              )}
             </Button>
           ) : (
             <Button onClick={startMic} disabled={starting} size="lg">
@@ -317,7 +321,7 @@ export default function PanelPage() {
             </p>
           ) : (
             <p className="text-sm text-muted-foreground">
-              {scribe.isConnected ? "Listening…" : "Mic off"}
+              {finishing ? "Finishing question…" : scribe.isConnected ? "Listening…" : "Mic off"}
             </p>
           )}
         </Card>
