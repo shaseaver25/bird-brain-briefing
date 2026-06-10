@@ -282,6 +282,7 @@ export type Database = {
           status: string
           system_prompt_preview: string | null
           updated_at: string
+          voice_id: string | null
         }
         Insert: {
           api_url?: string | null
@@ -294,6 +295,7 @@ export type Database = {
           status?: string
           system_prompt_preview?: string | null
           updated_at?: string
+          voice_id?: string | null
         }
         Update: {
           api_url?: string | null
@@ -306,6 +308,7 @@ export type Database = {
           status?: string
           system_prompt_preview?: string | null
           updated_at?: string
+          voice_id?: string | null
         }
         Relationships: []
       }

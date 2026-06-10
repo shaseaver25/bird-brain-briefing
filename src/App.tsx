@@ -13,6 +13,7 @@ import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
 import BookingPage from "./pages/BookingPage";
 import VoiceAgentPage from "./pages/VoiceAgentPage";
+import PanelPage from "./pages/PanelPage";
 import GlobalVoiceStop from "./components/GlobalVoiceStop";
 
 const queryClient = new QueryClient();
@@ -58,6 +59,7 @@ const App = () => (
           <Route path="/dashboard/:agentId" element={<AuthGate><KiroDashboardPage /></AuthGate>} />
           <Route path="/book" element={<BookingPage />} />
           <Route path="/voice" element={<AuthGate><VoiceAgentPage /></AuthGate>} />
+          <Route path="/panel" element={<AuthGate><PanelPage /></AuthGate>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         <GlobalVoiceStop />
