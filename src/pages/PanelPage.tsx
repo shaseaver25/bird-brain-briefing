@@ -77,6 +77,7 @@ export default function PanelPage() {
   const partialRef = useRef("");
   const lastSubmittedRef = useRef("");
   const finishTimerRef = useRef<number | null>(null);
+  const finishRequestedRef = useRef(false);
   panelistsRef.current = panelists;
 
   useEffect(() => {
@@ -176,7 +177,7 @@ export default function PanelPage() {
       setPartial("");
       const handled = handleCommittedRef.current(d.text);
       // Auto-stop mic after the question is captured so the panelist can answer
-      if (handled) stopMicRef.current();
+      if (handled || finishRequestedRef.current) stopMicRef.current();
     },
     onError: (e) => {
       console.error("[panel] scribe error:", e);
@@ -191,6 +192,7 @@ export default function PanelPage() {
       finishTimerRef.current = null;
     }
     setFinishing(false);
+    finishRequestedRef.current = false;
     partialRef.current = "";
     setPartial("");
   }, [scribe]);
@@ -199,6 +201,7 @@ export default function PanelPage() {
 
   const finishQuestion = useCallback(() => {
     const pendingText = partialRef.current.trim();
+    finishRequestedRef.current = true;
     setFinishing(true);
 
     try {
