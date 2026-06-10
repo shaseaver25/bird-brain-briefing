@@ -257,6 +257,11 @@ export default function PanelPage() {
     finishRequestedRef.current = true;
     setFinishing(true);
 
+    if (silenceTimerRef.current) {
+      window.clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+
     try {
       scribe.commit();
     } catch (e) {
