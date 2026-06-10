@@ -187,8 +187,10 @@ async function callMcp(request: AgentRequest, anthropicKey: string): Promise<Age
     systemPrompt += `\n\nYou are ${agentName} in a live staff meeting. The other agents are: ${others}. Shannon is the moderator.\n\nMEETING RULES:\n- If Shannon says YOUR name and asks you to expand, give a fuller answer (3-5 sentences).\n- If Shannon addresses ANOTHER agent and NOT you, respond with ONLY "---"\n- If it's a general question to everyone, respond with ONE short sentence.\n- Do NOT repeat, restate, or summarize what others said — especially the briefing. Add only YOUR distinct angle.\n- Speak in your own voice as ${agentName}. Two agents must never say the same thing.\n- NEVER use markdown or bullet points. Speak naturally.`;
   }
 
-  // Load conversation history
-  const history = await loadHistory(request.agentId, sessionId);
+  // Load conversation history — skipped in meeting mode, where the shared
+  // transcript already carries the context. Saves a DB round-trip and keeps
+  // the prompt small so responses start faster.
+  const history = request.meetingMode ? [] : await loadHistory(request.agentId, sessionId);
   const messages = [...history, { role: "user" as const, content: request.message }];
 
   // In meeting mode, use Haiku for speed and cap tokens for snappy responses
@@ -219,8 +221,10 @@ async function callMcp(request: AgentRequest, anthropicKey: string): Promise<Age
   const response = data.content?.[0]?.text ?? "";
   const tokens = { input: data.usage?.input_tokens ?? 0, output: data.usage?.output_tokens ?? 0 };
 
-  // Save conversation
-  await saveHistory(request.agentId, sessionId, request.message, response);
+  // Save conversation in the background — don't make the reply wait on it
+  void saveHistory(request.agentId, sessionId, request.message, response).catch((e) =>
+    console.warn("Failed to save conversation:", e)
+  );
 
   return { response, agentId: request.agentId, sessionId, tokens };
 }

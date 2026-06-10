@@ -33,8 +33,10 @@ export default function Index({ userId }: IndexProps) {
 
   // Detect if user is addressing a specific agent by name
   const detectTargetAgents = useCallback((text: string) => {
+    // Don't require a.apiUrl — MCP-mode agents (Claude API via Anthropic key)
+    // have no apiUrl and were being silently excluded from name targeting.
     const participating = store.agents.filter(
-      (a) => meetingParticipants.has(a.id) && a.apiUrl
+      (a) => meetingParticipants.has(a.id)
     );
     const lower = text.toLowerCase();
     const matched = participating.filter((a) => lower.includes(a.name.toLowerCase()));
@@ -99,10 +101,16 @@ export default function Index({ userId }: IndexProps) {
       // Add this agent's response to the transcript for the next agent
       meetingTranscriptRef.current.push(`${agent.name}: ${reply}`);
 
-      // Speak immediately (no queue needed — we're already sequential)
-      if (!abortRef.current) {
-        await handle.speak(reply);
-      }
+      // Enqueue TTS without awaiting — the next agent's API call runs while
+      // this one is still talking. The queue plays in speakOrder, so audio
+      // never overlaps; only the dead air between agents disappears.
+      ttsQueueRef.current.push({ agent, handle, reply });
+      void processTtsQueue();
+    }
+
+    // Keep the meeting "live" until all queued speech finishes
+    while (!abortRef.current && (ttsPlayingRef.current || ttsQueueRef.current.length > 0)) {
+      await new Promise((r) => setTimeout(r, 200));
     }
 
     // Keep transcript trimmed to last 40 entries to avoid token overflow
@@ -111,7 +119,7 @@ export default function Index({ userId }: IndexProps) {
     }
 
     setIsBroadcasting(false);
-  }, [meetingActive, detectTargetAgents, isBroadcasting]);
+  }, [meetingActive, detectTargetAgents, isBroadcasting, processTtsQueue]);
 
   const handleStop = useCallback(() => {
     abortRef.current = true;
@@ -226,128 +234,10 @@ export default function Index({ userId }: IndexProps) {
             </button>
 
             <button
-              onClick={async () => {
-                const starting = !meetingActive;
-                setMeetingActive(starting);
-                if (starting) {
-                  // Find Wren and have her deliver the briefing automatically
-                  const wren = store.agents.find((a) => a.name.toLowerCase() === "wren");
-                  if (wren) {
-                    const handle = panelRefs.current.get(wren.id);
-                    if (handle) {
-                      // Small delay so the meeting UI renders first
-                      setTimeout(async () => {
-                        setIsBroadcasting(true);
-                        abortRef.current = false;
-
-                        // Step 1: Compile a fresh briefing from real data sources
-                        // (calendar, Gmail, SalesHawk leads, Kiro intel) and read it verbatim.
-                        // This avoids Wren hallucinating canned briefings each meeting.
-                        let briefing = "";
-                        try {
-                          // Fire wren-briefing to recompile
-                          await supabase.functions.invoke("wren-briefing", { body: {} });
-
-                          // Poll widget_data for the freshly compiled briefing (max ~30s)
-                          const startedAt = Date.now();
-                          for (let i = 0; i < 30; i++) {
-                            if (abortRef.current) break;
-                            const { data } = await supabase
-                              .from("widget_data")
-                              .select("data, updated_at")
-                              .eq("agent_id", "wren")
-                              .eq("widget_key", "morning_briefing")
-                              .maybeSingle();
-                            const compiledAtRaw = (data?.data as { compiled_at?: string } | null)?.compiled_at;
-                            const compiledAt = compiledAtRaw ? new Date(compiledAtRaw).getTime() : 0;
-                            if (data && compiledAt >= startedAt - 2000) {
-                              briefing = (data.data as { briefing?: string }).briefing ?? "";
-                              break;
-                            }
-                            await new Promise((r) => setTimeout(r, 1000));
-                          }
-
-                          // Fallback: use whatever's stored if polling didn't catch a fresh one
-                          if (!briefing) {
-                            const { data } = await supabase
-                              .from("widget_data")
-                              .select("data")
-                              .eq("agent_id", "wren")
-                              .eq("widget_key", "morning_briefing")
-                              .maybeSingle();
-                            briefing = (data?.data as { briefing?: string } | null)?.briefing ?? "";
-                          }
-                        } catch (e) {
-                          console.error("Failed to fetch fresh briefing:", e);
-                        }
-
-                        // If we still don't have a briefing, ask Wren to improvise
-                        if (!briefing) {
-                          briefing = await handle.sendMeetingMessage(
-                            "__AUTO_BRIEFING__",
-                            ["[Meeting started — Wren delivers morning briefing]"]
-                          );
-                        }
-
-                        // Guard: don't propagate error strings or silences to other agents
-                        const isError = (s: string) =>
-                          !s ||
-                          s.trim() === "---" ||
-                          s.toLowerCase().includes("failed to load") ||
-                          s.toLowerCase().includes("connection error") ||
-                          s.toLowerCase().includes("please try again") ||
-                          s.toLowerCase().includes("not found");
-
-                        if (isError(briefing)) {
-                          setIsBroadcasting(false);
-                          return;
-                        }
-
-                        // Add to transcript so all other agents can hear it
-                        meetingTranscriptRef.current.push(`Wren: ${briefing}`);
-                        await handle.speak(briefing);
-
-                        if (abortRef.current) { setIsBroadcasting(false); return; }
-
-                        // Step 2: Other agents hear the briefing and can react
-                        // Note: exclude ALL agents named "wren" (handles duplicate-Wren edge case)
-                        // Also allow agents without apiUrl (they use MCP/Anthropic key directly)
-                        const others = store.agents.filter(
-                          (a) => a.name.toLowerCase() !== "wren" &&
-                          meetingParticipants.has(a.id)
-                        ).sort((a, b) => a.speakOrder - b.speakOrder);
-
-                        for (const agent of others) {
-                          if (abortRef.current) break;
-                          const agentHandle = panelRefs.current.get(agent.id);
-                          if (!agentHandle) continue;
-
-                          // Don't hand agents the briefing as their message — that makes
-                          // weaker personas echo it verbatim. The briefing is already in the
-                          // transcript above; instruct each agent to react from THEIR role.
-                          const reaction = await agentHandle.sendMeetingMessage(
-                            `Wren just delivered the morning briefing (see the transcript above). React briefly as ${agent.name}, the ${agent.role} — add the ONE thing only you would flag or notice, in one or two sentences. Do NOT restate, summarize, or repeat the briefing. If you genuinely have nothing to add, respond with only "---".`,
-                            [...meetingTranscriptRef.current]
-                          );
-                          if (!reaction || reaction.trim() === "---") continue;
-
-                          // Safety net: if an agent echoed the briefing anyway, drop it
-                          const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-                          if (norm(reaction).length > 40 && norm(briefing).includes(norm(reaction).slice(0, 40))) continue;
-
-                          meetingTranscriptRef.current.push(`${agent.name}: ${reaction}`);
-                          if (!abortRef.current) await agentHandle.speak(reaction);
-                        }
-
-                        // Trim transcript
-                        if (meetingTranscriptRef.current.length > 20) {
-                          meetingTranscriptRef.current = meetingTranscriptRef.current.slice(-20);
-                        }
-                        setIsBroadcasting(false);
-                      }, 800);
-                    }
-                  }
-                }
+              onClick={() => {
+                // Shannon opens the meeting and asks the first question herself —
+                // no auto-briefing. Agents wait until she speaks or types.
+                setMeetingActive(!meetingActive);
               }}
               className="flex items-center gap-2 px-5 py-2.5 rounded-md font-mono text-sm font-medium transition-all duration-300"
               style={{
