@@ -353,7 +353,7 @@ export default function PanelPage() {
           <div>
             <h1 className="text-3xl font-bold">Panel of Experts</h1>
             <p className="text-muted-foreground text-sm mt-1">
-              Open the mic and ask a question by name — e.g. "Wren, what's on the agenda?"
+              Ask a question to the whole panel — interested experts will raise a hand. Then call on one by name.
             </p>
           </div>
           {scribe.isConnected ? (
