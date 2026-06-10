@@ -106,8 +106,8 @@ export default function Index({ userId }: IndexProps) {
     }
 
     // Keep transcript trimmed to last 40 entries to avoid token overflow
-    if (meetingTranscriptRef.current.length > 40) {
-      meetingTranscriptRef.current = meetingTranscriptRef.current.slice(-40);
+    if (meetingTranscriptRef.current.length > 20) {
+      meetingTranscriptRef.current = meetingTranscriptRef.current.slice(-20);
     }
 
     setIsBroadcasting(false);
@@ -333,8 +333,8 @@ export default function Index({ userId }: IndexProps) {
                         }
 
                         // Trim transcript
-                        if (meetingTranscriptRef.current.length > 40) {
-                          meetingTranscriptRef.current = meetingTranscriptRef.current.slice(-40);
+                        if (meetingTranscriptRef.current.length > 20) {
+                          meetingTranscriptRef.current = meetingTranscriptRef.current.slice(-20);
                         }
                         setIsBroadcasting(false);
                       }, 800);

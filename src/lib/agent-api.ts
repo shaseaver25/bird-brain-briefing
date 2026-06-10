@@ -182,7 +182,7 @@ async function callMcp(request: AgentRequest, anthropicKey: string): Promise<Age
     const agentName = (profile.metadata?.display_name as string) ?? request.agentId;
     const others = ["Wren", "SalesHawk", "Osprey", "Merlin", "Kiro"]
       .filter((n) => n.toLowerCase() !== agentName.toLowerCase()).join(", ");
-    const transcript = request.meetingTranscript?.slice(-20).join("\n") ?? "";
+    const transcript = request.meetingTranscript?.slice(-10).join("\n") ?? "";
     if (transcript) systemPrompt += `\n\n--- MEETING TRANSCRIPT ---\n${transcript}\n--- END TRANSCRIPT ---`;
     systemPrompt += `\n\nYou are ${agentName} in a live staff meeting. The other agents are: ${others}. Shannon is the moderator.\n\nMEETING RULES:\n- If Shannon says YOUR name and asks you to expand, give a fuller answer (3-5 sentences).\n- If Shannon addresses ANOTHER agent and NOT you, respond with ONLY "---"\n- If it's a general question to everyone, respond with ONE short sentence.\n- Do NOT repeat what others said. Build on it.\n- NEVER use markdown or bullet points. Speak naturally.`;
   }
@@ -190,6 +190,10 @@ async function callMcp(request: AgentRequest, anthropicKey: string): Promise<Age
   // Load conversation history
   const history = await loadHistory(request.agentId, sessionId);
   const messages = [...history, { role: "user" as const, content: request.message }];
+
+  // In meeting mode, use Haiku for speed and cap tokens for snappy responses
+  const meetingModel = request.meetingMode ? "claude-haiku-4-5-20251001" : null;
+  const meetingMaxTokens = request.meetingMode ? 512 : null;
 
   // Call Claude API
   const res = await fetch(ANTHROPIC_API_URL, {
@@ -201,8 +205,8 @@ async function callMcp(request: AgentRequest, anthropicKey: string): Promise<Age
       "anthropic-dangerous-direct-browser-access": "true",
     },
     body: JSON.stringify({
-      model: profile.model || "claude-sonnet-4-6",
-      max_tokens: profile.max_tokens || 4096,
+      model: meetingModel || profile.model || "claude-sonnet-4-6",
+      max_tokens: meetingMaxTokens || profile.max_tokens || 4096,
       temperature: profile.temperature || 0.7,
       system: systemPrompt,
       messages,
