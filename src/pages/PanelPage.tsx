@@ -94,14 +94,19 @@ export default function PanelPage() {
   const partialRef = useRef("");
   const lastSubmittedRef = useRef("");
   const finishTimerRef = useRef<number | null>(null);
+  const silenceTimerRef = useRef<number | null>(null);
   const finishRequestedRef = useRef(false);
+  const commitRef = useRef<() => void>(() => {});
   panelistsRef.current = panelists;
 
   useEffect(() => {
     return () => {
       if (finishTimerRef.current) window.clearTimeout(finishTimerRef.current);
+      if (silenceTimerRef.current) window.clearTimeout(silenceTimerRef.current);
     };
   }, []);
+
+  const SILENCE_MS = 2500;
 
   const panelistKeyterms = useMemo(
     () => [...new Set(panelists.flatMap((p) => [p.name, ...panelistNameVariants(p.name)]))],
@@ -184,13 +189,26 @@ export default function PanelPage() {
 
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
-    commitStrategy: "vad" as any,
+    commitStrategy: "manual" as any,
     keyterms: panelistKeyterms,
     onPartialTranscript: (d) => {
       partialRef.current = d.text;
       setPartial(d.text);
+      // Reset silence timer on every new partial transcript
+      if (silenceTimerRef.current) {
+        window.clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+      silenceTimerRef.current = window.setTimeout(() => {
+        silenceTimerRef.current = null;
+        commitRef.current();
+      }, SILENCE_MS);
     },
     onCommittedTranscript: (d) => {
+      if (silenceTimerRef.current) {
+        window.clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
       if (finishTimerRef.current) {
         window.clearTimeout(finishTimerRef.current);
         finishTimerRef.current = null;
@@ -208,11 +226,23 @@ export default function PanelPage() {
     },
   });
 
+  commitRef.current = () => {
+    try {
+      scribe.commit();
+    } catch (e) {
+      console.warn("[panel] auto-commit failed:", e);
+    }
+  };
+
   const stopMic = useCallback(() => {
     scribe.disconnect();
     if (finishTimerRef.current) {
       window.clearTimeout(finishTimerRef.current);
       finishTimerRef.current = null;
+    }
+    if (silenceTimerRef.current) {
+      window.clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
     }
     setFinishing(false);
     finishRequestedRef.current = false;
@@ -226,6 +256,11 @@ export default function PanelPage() {
     const pendingText = partialRef.current.trim();
     finishRequestedRef.current = true;
     setFinishing(true);
+
+    if (silenceTimerRef.current) {
+      window.clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
 
     try {
       scribe.commit();
