@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useScribe } from "@elevenlabs/react";
+import { CommitStrategy } from "@elevenlabs/client";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -139,7 +140,7 @@ export default function PanelPage() {
 
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
-    commitStrategy: "vad",
+    commitStrategy: CommitStrategy.VAD,
     onPartialTranscript: (data: any) => setPartial(data?.text ?? ""),
     onCommittedTranscript: (data: any) => {
       setPartial("");
