@@ -322,11 +322,18 @@ export default function Index({ userId }: IndexProps) {
                           const agentHandle = panelRefs.current.get(agent.id);
                           if (!agentHandle) continue;
 
+                          // Don't hand agents the briefing as their message — that makes
+                          // weaker personas echo it verbatim. The briefing is already in the
+                          // transcript above; instruct each agent to react from THEIR role.
                           const reaction = await agentHandle.sendMeetingMessage(
-                            briefing,
+                            `Wren just delivered the morning briefing (see the transcript above). React briefly as ${agent.name}, the ${agent.role} — add the ONE thing only you would flag or notice, in one or two sentences. Do NOT restate, summarize, or repeat the briefing. If you genuinely have nothing to add, respond with only "---".`,
                             [...meetingTranscriptRef.current]
                           );
                           if (!reaction || reaction.trim() === "---") continue;
+
+                          // Safety net: if an agent echoed the briefing anyway, drop it
+                          const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+                          if (norm(reaction).length > 40 && norm(briefing).includes(norm(reaction).slice(0, 40))) continue;
 
                           meetingTranscriptRef.current.push(`${agent.name}: ${reaction}`);
                           if (!abortRef.current) await agentHandle.speak(reaction);

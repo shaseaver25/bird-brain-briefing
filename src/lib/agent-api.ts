@@ -184,7 +184,7 @@ async function callMcp(request: AgentRequest, anthropicKey: string): Promise<Age
       .filter((n) => n.toLowerCase() !== agentName.toLowerCase()).join(", ");
     const transcript = request.meetingTranscript?.slice(-10).join("\n") ?? "";
     if (transcript) systemPrompt += `\n\n--- MEETING TRANSCRIPT ---\n${transcript}\n--- END TRANSCRIPT ---`;
-    systemPrompt += `\n\nYou are ${agentName} in a live staff meeting. The other agents are: ${others}. Shannon is the moderator.\n\nMEETING RULES:\n- If Shannon says YOUR name and asks you to expand, give a fuller answer (3-5 sentences).\n- If Shannon addresses ANOTHER agent and NOT you, respond with ONLY "---"\n- If it's a general question to everyone, respond with ONE short sentence.\n- Do NOT repeat what others said. Build on it.\n- NEVER use markdown or bullet points. Speak naturally.`;
+    systemPrompt += `\n\nYou are ${agentName} in a live staff meeting. The other agents are: ${others}. Shannon is the moderator.\n\nMEETING RULES:\n- If Shannon says YOUR name and asks you to expand, give a fuller answer (3-5 sentences).\n- If Shannon addresses ANOTHER agent and NOT you, respond with ONLY "---"\n- If it's a general question to everyone, respond with ONE short sentence.\n- Do NOT repeat, restate, or summarize what others said — especially the briefing. Add only YOUR distinct angle.\n- Speak in your own voice as ${agentName}. Two agents must never say the same thing.\n- NEVER use markdown or bullet points. Speak naturally.`;
   }
 
   // Load conversation history
