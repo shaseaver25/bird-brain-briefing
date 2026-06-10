@@ -71,9 +71,20 @@ export default function PanelPage() {
   const [lastQuestion, setLastQuestion] = useState<{ name: string; text: string } | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [starting, setStarting] = useState(false);
+  const [finishing, setFinishing] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const panelistsRef = useRef<Panelist[]>([]);
+  const partialRef = useRef("");
+  const lastSubmittedRef = useRef("");
+  const finishTimerRef = useRef<number | null>(null);
+  const finishRequestedRef = useRef(false);
   panelistsRef.current = panelists;
+
+  useEffect(() => {
+    return () => {
+      if (finishTimerRef.current) window.clearTimeout(finishTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -125,17 +136,21 @@ export default function PanelPage() {
 
   const handleCommitted = useCallback(
     (text: string) => {
-      if (!text?.trim()) return;
-      console.log("[panel] committed text:", text);
-      const match = matchPanelist(text, panelistsRef.current);
+      const cleanText = text?.trim();
+      if (!cleanText) return false;
+      if (lastSubmittedRef.current === cleanText) return true;
+      console.log("[panel] committed text:", cleanText);
+      const match = matchPanelist(cleanText, panelistsRef.current);
       if (!match) {
         toast("No panelist named — try starting with a name", {
-          description: text,
+          description: cleanText,
         });
-        return;
+        return false;
       }
+      lastSubmittedRef.current = cleanText;
       console.log("[panel] matched:", match.panelist.name, "question:", match.rest);
       askPanelist(match.panelist.id, match.panelist.name, match.rest);
+      return true;
     },
     [askPanelist],
   );
@@ -148,12 +163,21 @@ export default function PanelPage() {
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
     commitStrategy: "vad" as any,
-    onPartialTranscript: (d) => setPartial(d.text),
+    onPartialTranscript: (d) => {
+      partialRef.current = d.text;
+      setPartial(d.text);
+    },
     onCommittedTranscript: (d) => {
+      if (finishTimerRef.current) {
+        window.clearTimeout(finishTimerRef.current);
+        finishTimerRef.current = null;
+      }
+      setFinishing(false);
+      partialRef.current = "";
       setPartial("");
-      handleCommittedRef.current(d.text);
+      const handled = handleCommittedRef.current(d.text);
       // Auto-stop mic after the question is captured so the panelist can answer
-      stopMicRef.current();
+      if (handled || finishRequestedRef.current) stopMicRef.current();
     },
     onError: (e) => {
       console.error("[panel] scribe error:", e);
@@ -163,13 +187,39 @@ export default function PanelPage() {
 
   const stopMic = useCallback(() => {
     scribe.disconnect();
-    if (audioRef.current) audioRef.current.pause();
-    setActiveAgentId(null);
-    setThinkingAgentId(null);
+    if (finishTimerRef.current) {
+      window.clearTimeout(finishTimerRef.current);
+      finishTimerRef.current = null;
+    }
+    setFinishing(false);
+    finishRequestedRef.current = false;
+    partialRef.current = "";
     setPartial("");
   }, [scribe]);
 
   stopMicRef.current = stopMic;
+
+  const finishQuestion = useCallback(() => {
+    const pendingText = partialRef.current.trim();
+    finishRequestedRef.current = true;
+    setFinishing(true);
+
+    try {
+      scribe.commit();
+    } catch (e) {
+      console.warn("[panel] manual commit failed; using partial transcript", e);
+    }
+
+    finishTimerRef.current = window.setTimeout(() => {
+      finishTimerRef.current = null;
+      if (pendingText) {
+        handleCommittedRef.current(pendingText);
+      } else {
+        toast("No speech captured — try again and start with a panelist name");
+      }
+      stopMicRef.current();
+    }, pendingText ? 700 : 1800);
+  }, [scribe]);
 
   const startMic = useCallback(async () => {
     setStarting(true);
@@ -207,8 +257,12 @@ export default function PanelPage() {
             </p>
           </div>
           {scribe.isConnected ? (
-            <Button onClick={stopMic} variant="destructive" size="lg">
-              <MicOff className="mr-2 h-4 w-4" /> Stop mic
+            <Button onClick={finishQuestion} disabled={finishing} variant="destructive" size="lg">
+              {finishing ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Finishing…</>
+              ) : (
+                <><MicOff className="mr-2 h-4 w-4" /> Finish question</>
+              )}
             </Button>
           ) : (
             <Button onClick={startMic} disabled={starting} size="lg">
@@ -270,7 +324,7 @@ export default function PanelPage() {
             </p>
           ) : (
             <p className="text-sm text-muted-foreground">
-              {scribe.isConnected ? "Listening…" : "Mic off"}
+              {finishing ? "Finishing question…" : scribe.isConnected ? "Listening…" : "Mic off"}
             </p>
           )}
         </Card>
