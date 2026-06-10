@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useScribe } from "@elevenlabs/react";
-import { CommitStrategy } from "@elevenlabs/client";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -63,6 +61,87 @@ function matchPanelist(text: string, panelists: Panelist[]): { panelist: Panelis
   return null;
 }
 
+// ── Web Speech API hook (free, no API key, works in Chrome/Edge) ──
+function useWebSpeech({
+  onPartial,
+  onCommitted,
+  onError,
+}: {
+  onPartial: (text: string) => void;
+  onCommitted: (text: string) => void;
+  onError: (err: string) => void;
+}) {
+  const recognitionRef = useRef<any>(null);
+  const [isConnected, setIsConnected] = useState(false);
+
+  const connect = useCallback(() => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      onError("Web Speech API not supported in this browser — use Chrome or Edge");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+
+    recognition.onresult = (event: any) => {
+      let interim = "";
+      let final = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          final += transcript;
+        } else {
+          interim += transcript;
+        }
+      }
+      if (interim) onPartial(interim);
+      if (final.trim()) {
+        onPartial("");
+        onCommitted(final.trim());
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("[panel] speech error:", event.error);
+      if (event.error === "not-allowed") {
+        onError("Microphone permission denied — allow mic access and try again");
+      } else if (event.error !== "no-speech" && event.error !== "aborted") {
+        onError(`Speech error: ${event.error}`);
+      }
+    };
+
+    // Auto-restart on end (browser stops after silence, we want continuous)
+    recognition.onend = () => {
+      if (recognitionRef.current === recognition) {
+        try {
+          recognition.start();
+        } catch {
+          // already started — ignore
+        }
+      }
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsConnected(true);
+  }, [onPartial, onCommitted, onError]);
+
+  const disconnect = useCallback(() => {
+    if (recognitionRef.current) {
+      const ref = recognitionRef.current;
+      recognitionRef.current = null; // prevent auto-restart
+      ref.stop();
+      setIsConnected(false);
+    }
+  }, []);
+
+  return { isConnected, connect, disconnect };
+}
+
 export default function PanelPage() {
   const [panelists, setPanelists] = useState<Panelist[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,6 +161,7 @@ export default function PanelPage() {
         .from("agents")
         .select("id, name, role, description, voice_id")
         .order("name");
+      console.log("[panel] loaded panelists:", data?.length, error);
       if (error) {
         toast.error("Failed to load panelists");
       } else {
@@ -126,6 +206,7 @@ export default function PanelPage() {
   const handleCommitted = useCallback(
     (text: string) => {
       if (!text?.trim()) return;
+      console.log("[panel] committed text:", text);
       const match = matchPanelist(text, panelistsRef.current);
       if (!match) {
         toast("No panelist named — try starting with a name", {
@@ -133,50 +214,22 @@ export default function PanelPage() {
         });
         return;
       }
+      console.log("[panel] matched:", match.panelist.name, "question:", match.rest);
       askPanelist(match.panelist.id, match.panelist.name, match.rest);
     },
     [askPanelist],
   );
 
-  const scribe = useScribe({
-    modelId: "scribe_v2_realtime",
-    commitStrategy: CommitStrategy.VAD,
-    onPartialTranscript: (data: any) => {
-      console.log("[panel] partial:", data?.text);
-      setPartial(data?.text ?? "");
-    },
-    onCommittedTranscript: (data: any) => {
-      console.log("[panel] committed:", data?.text);
-      setPartial("");
-      handleCommitted(data?.text ?? "");
-    },
-    onError: (err: any) => {
-      console.error("[panel] Scribe onError:", err);
-      const msg = err?.message || err?.error || (typeof err === "string" ? err : JSON.stringify(err));
-      toast.error(`Mic error: ${msg}`);
-    },
-    onAuthError: (err: any) => {
-      console.error("[panel] Scribe auth error:", err);
-      toast.error(`Scribe auth error: ${err?.error || "check ElevenLabs key"}`);
-    },
-    onQuotaExceededError: (err: any) => {
-      console.error("[panel] Scribe quota exceeded:", err);
-      toast.error("ElevenLabs Scribe quota exceeded — check your plan");
-    },
+  const speech = useWebSpeech({
+    onPartial: setPartial,
+    onCommitted: handleCommitted,
+    onError: (msg) => toast.error(msg),
   });
 
-  const startMic = useCallback(async () => {
+  const startMic = useCallback(() => {
     setStarting(true);
     try {
-      const { data, error } = await supabase.functions.invoke("elevenlabs-scribe-token");
-      console.log("[panel] scribe token response:", { data, error });
-      if (error) throw error;
-      if (!data?.token) throw new Error("No token returned from scribe-token endpoint");
-      await scribe.connect({
-        token: data.token,
-        microphone: { echoCancellation: true, noiseSuppression: true },
-      });
-      console.log("[panel] scribe connected, status:", scribe.status);
+      speech.connect();
       toast.success("Mic on — ask a panelist by name");
     } catch (e) {
       console.error("[panel] startMic error:", e);
@@ -184,15 +237,15 @@ export default function PanelPage() {
     } finally {
       setStarting(false);
     }
-  }, [scribe]);
+  }, [speech]);
 
-  const stopMic = useCallback(async () => {
-    await scribe.disconnect();
+  const stopMic = useCallback(() => {
+    speech.disconnect();
     if (audioRef.current) audioRef.current.pause();
     setActiveAgentId(null);
     setThinkingAgentId(null);
     setPartial("");
-  }, [scribe]);
+  }, [speech]);
 
   const colorFor = useMemo(() => {
     const map = new Map<string, string>();
@@ -210,7 +263,7 @@ export default function PanelPage() {
               Open the mic and ask a question by name — e.g. "Wren, what's on the agenda?"
             </p>
           </div>
-          {scribe.isConnected ? (
+          {speech.isConnected ? (
             <Button onClick={stopMic} variant="destructive" size="lg">
               <MicOff className="mr-2 h-4 w-4" /> Stop mic
             </Button>
@@ -274,7 +327,7 @@ export default function PanelPage() {
             </p>
           ) : (
             <p className="text-sm text-muted-foreground">
-              {scribe.isConnected ? "Listening…" : "Mic off"}
+              {speech.isConnected ? "Listening…" : "Mic off"}
             </p>
           )}
         </Card>
