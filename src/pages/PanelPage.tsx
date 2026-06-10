@@ -141,14 +141,27 @@ export default function PanelPage() {
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
     commitStrategy: CommitStrategy.VAD,
-    onPartialTranscript: (data: any) => setPartial(data?.text ?? ""),
+    onPartialTranscript: (data: any) => {
+      console.log("[panel] partial:", data?.text);
+      setPartial(data?.text ?? "");
+    },
     onCommittedTranscript: (data: any) => {
+      console.log("[panel] committed:", data?.text);
       setPartial("");
       handleCommitted(data?.text ?? "");
     },
     onError: (err: any) => {
-      console.error("Scribe error:", err);
-      toast.error("Mic error");
+      console.error("[panel] Scribe onError:", err);
+      const msg = err?.message || err?.error || (typeof err === "string" ? err : JSON.stringify(err));
+      toast.error(`Mic error: ${msg}`);
+    },
+    onAuthError: (err: any) => {
+      console.error("[panel] Scribe auth error:", err);
+      toast.error(`Scribe auth error: ${err?.error || "check ElevenLabs key"}`);
+    },
+    onQuotaExceededError: (err: any) => {
+      console.error("[panel] Scribe quota exceeded:", err);
+      toast.error("ElevenLabs Scribe quota exceeded — check your plan");
     },
   });
 
@@ -156,15 +169,17 @@ export default function PanelPage() {
     setStarting(true);
     try {
       const { data, error } = await supabase.functions.invoke("elevenlabs-scribe-token");
+      console.log("[panel] scribe token response:", { data, error });
       if (error) throw error;
-      if (!data?.token) throw new Error("No token");
+      if (!data?.token) throw new Error("No token returned from scribe-token endpoint");
       await scribe.connect({
         token: data.token,
         microphone: { echoCancellation: true, noiseSuppression: true },
       });
+      console.log("[panel] scribe connected, status:", scribe.status);
       toast.success("Mic on — ask a panelist by name");
     } catch (e) {
-      console.error(e);
+      console.error("[panel] startMic error:", e);
       toast.error((e as Error).message || "Could not start mic");
     } finally {
       setStarting(false);
