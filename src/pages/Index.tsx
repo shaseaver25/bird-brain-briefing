@@ -31,15 +31,29 @@ export default function Index({ userId }: IndexProps) {
     else panelRefs.current.delete(id);
   }, []);
 
-  // Detect if user is addressing a specific agent by name
+  // Detect if user is addressing a specific agent by name.
+  // Speech-friendly: transcription splits names ("sales hawk") and people use
+  // shorthand ("Hawk"). Compare whole words and adjacent word-pairs against
+  // the name; allow a distinctive suffix (>=4 chars) so "Hawk" hits SalesHawk
+  // without short fragments causing false positives.
+  const mentionsName = (text: string, name: string): boolean => {
+    const nameKey = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const words = text.toLowerCase().match(/[a-z0-9]+/g) ?? [];
+    for (let w = 0; w < words.length; w++) {
+      if (words[w] === nameKey) return true;
+      if (words[w].length >= 4 && nameKey.endsWith(words[w])) return true;
+      if (w + 1 < words.length && words[w] + words[w + 1] === nameKey) return true;
+    }
+    return false;
+  };
+
   const detectTargetAgents = useCallback((text: string) => {
     // Don't require a.apiUrl — MCP-mode agents (Claude API via Anthropic key)
     // have no apiUrl and were being silently excluded from name targeting.
     const participating = store.agents.filter(
       (a) => meetingParticipants.has(a.id)
     );
-    const lower = text.toLowerCase();
-    const matched = participating.filter((a) => lower.includes(a.name.toLowerCase()));
+    const matched = participating.filter((a) => mentionsName(text, a.name));
     return matched.length > 0 ? matched : participating;
   }, [store.agents, meetingParticipants]);
 
