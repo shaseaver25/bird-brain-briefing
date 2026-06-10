@@ -143,6 +143,8 @@ export default function PanelPage() {
   const handleCommittedRef = useRef(handleCommitted);
   handleCommittedRef.current = handleCommitted;
 
+  const stopMicRef = useRef<() => void>(() => {});
+
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
     commitStrategy: "vad" as any,
@@ -150,31 +152,14 @@ export default function PanelPage() {
     onCommittedTranscript: (d) => {
       setPartial("");
       handleCommittedRef.current(d.text);
+      // Auto-stop mic after the question is captured so the panelist can answer
+      stopMicRef.current();
     },
     onError: (e) => {
       console.error("[panel] scribe error:", e);
       toast.error((e as Error)?.message || "Transcription error");
     },
   });
-
-  const startMic = useCallback(async () => {
-    setStarting(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("elevenlabs-scribe-token");
-      if (error) throw error;
-      if (!data?.token) throw new Error("No token from server");
-      await scribe.connect({
-        token: data.token,
-        microphone: { echoCancellation: true, noiseSuppression: true } as any,
-      });
-      toast.success("Mic on — ask a panelist by name");
-    } catch (e) {
-      console.error("[panel] startMic error:", e);
-      toast.error((e as Error).message || "Could not start mic");
-    } finally {
-      setStarting(false);
-    }
-  }, [scribe]);
 
   const stopMic = useCallback(() => {
     scribe.disconnect();
@@ -183,6 +168,8 @@ export default function PanelPage() {
     setThinkingAgentId(null);
     setPartial("");
   }, [scribe]);
+
+  stopMicRef.current = stopMic;
 
   const colorFor = useMemo(() => {
     const map = new Map<string, string>();
