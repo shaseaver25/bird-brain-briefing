@@ -41,6 +41,22 @@ function initials(name: string) {
     .toUpperCase();
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function panelistNameVariants(name: string) {
+  const normalized = name.toLowerCase().trim();
+  const first = normalized.split(/\s+/)[0];
+  const variants = new Set([normalized, first]);
+
+  for (const part of normalized.split(/\s+/)) {
+    if (part.startsWith("wr") && part.length > 2) variants.add(part.slice(1));
+  }
+
+  return [...variants].filter(Boolean).sort((a, b) => b.length - a.length);
+}
+
 // Try to find which panelist is being addressed at the start of a question.
 function matchPanelist(text: string, panelists: Panelist[]): { panelist: Panelist; rest: string } | null {
   const cleaned = text.trim().replace(/^(hey|hi|hello|ok|okay|so|um|uh)[\s,]+/i, "");
@@ -48,15 +64,16 @@ function matchPanelist(text: string, panelists: Panelist[]): { panelist: Panelis
   // longest names first to avoid prefix collisions
   const sorted = [...panelists].sort((a, b) => b.name.length - a.name.length);
   for (const p of sorted) {
-    const n = p.name.toLowerCase();
-    if (lower.startsWith(n)) {
-      const rest = cleaned.slice(n.length).replace(/^[\s,:\-–—!?.]+/, "").trim();
-      return { panelist: p, rest: rest || cleaned };
-    }
-    // also tolerate name anywhere in the first 6 words
-    const first = lower.split(/\s+/).slice(0, 6).join(" ");
-    if (new RegExp(`\\b${n}\\b`).test(first)) {
-      return { panelist: p, rest: cleaned };
+    for (const n of panelistNameVariants(p.name)) {
+      if (lower.startsWith(n)) {
+        const rest = cleaned.slice(n.length).replace(/^[\s,:\-–—!?.]+/, "").trim();
+        return { panelist: p, rest: rest || cleaned };
+      }
+      // also tolerate name anywhere in the first 6 words
+      const first = lower.split(/\s+/).slice(0, 6).join(" ");
+      if (new RegExp(`\\b${escapeRegExp(n)}\\b`).test(first)) {
+        return { panelist: p, rest: cleaned };
+      }
     }
   }
   return null;
@@ -85,6 +102,11 @@ export default function PanelPage() {
       if (finishTimerRef.current) window.clearTimeout(finishTimerRef.current);
     };
   }, []);
+
+  const panelistKeyterms = useMemo(
+    () => [...new Set(panelists.flatMap((p) => [p.name, ...panelistNameVariants(p.name)]))],
+    [panelists],
+  );
 
   useEffect(() => {
     (async () => {
@@ -163,6 +185,7 @@ export default function PanelPage() {
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
     commitStrategy: "vad" as any,
+    keyterms: panelistKeyterms,
     onPartialTranscript: (d) => {
       partialRef.current = d.text;
       setPartial(d.text);
@@ -229,6 +252,7 @@ export default function PanelPage() {
       if (!data?.token) throw new Error("No token from server");
       await scribe.connect({
         token: data.token,
+        keyterms: panelistKeyterms,
         microphone: { echoCancellation: true, noiseSuppression: true } as any,
       });
       toast.success("Mic on — ask a panelist by name");
