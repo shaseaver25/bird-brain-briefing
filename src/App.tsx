@@ -14,6 +14,7 @@ import NotFound from "./pages/NotFound";
 import BookingPage from "./pages/BookingPage";
 import VoiceAgentPage from "./pages/VoiceAgentPage";
 import PanelPage from "./pages/PanelPage";
+import MyAgentPage from "./pages/MyAgentPage";
 import GlobalVoiceStop from "./components/GlobalVoiceStop";
 
 const queryClient = new QueryClient();
@@ -60,6 +61,7 @@ const App = () => (
           <Route path="/book" element={<BookingPage />} />
           <Route path="/voice" element={<AuthGate><VoiceAgentPage /></AuthGate>} />
           <Route path="/panel" element={<AuthGate><PanelPage /></AuthGate>} />
+          <Route path="/my-agent" element={<AuthGate><MyAgentPage /></AuthGate>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         <GlobalVoiceStop />
