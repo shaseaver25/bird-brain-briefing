@@ -106,7 +106,7 @@ async function resolveAgentProfile(agentId: string): Promise<{
   return profile ?? null;
 }
 
-async function loadHistory(agentId: string, sessionId: string): Promise<{ role: "user" | "assistant"; content: string }[]> {
+async function loadHistory(agentId: string, sessionId: string, limit = 40): Promise<{ role: "user" | "assistant"; content: string }[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
@@ -114,7 +114,7 @@ async function loadHistory(agentId: string, sessionId: string): Promise<{ role: 
   const { data: agent } = await (supabase.from("agents" as any).select("id").ilike("name", displayName).single() as any);
   if (!agent) return [];
 
-  // Load up to 40 most recent messages across all sessions in the last 14 days,
+  // Load recent messages across all sessions in the last 14 days,
   // so the agent has cross-session memory. Older rows are auto-purged by cron.
   const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
   const { data } = await (supabase
@@ -124,7 +124,7 @@ async function loadHistory(agentId: string, sessionId: string): Promise<{ role: 
     .eq("agent_id", agent.id)
     .gte("created_at", cutoff)
     .order("created_at", { ascending: false })
-    .limit(40) as any);
+    .limit(limit) as any);
 
   // Reverse to chronological order for the model
   return (data ?? [])
@@ -184,13 +184,13 @@ async function callMcp(request: AgentRequest, anthropicKey: string): Promise<Age
       .filter((n) => n.toLowerCase() !== agentName.toLowerCase()).join(", ");
     const transcript = request.meetingTranscript?.slice(-10).join("\n") ?? "";
     if (transcript) systemPrompt += `\n\n--- MEETING TRANSCRIPT ---\n${transcript}\n--- END TRANSCRIPT ---`;
-    systemPrompt += `\n\nYou are ${agentName} in a live staff meeting. The other agents are: ${others}. Shannon is the moderator.\n\nMEETING RULES:\n- If Shannon says YOUR name and asks you to expand, give a fuller answer (3-5 sentences).\n- If Shannon addresses ANOTHER agent and NOT you, respond with ONLY "---"\n- If it's a general question to everyone, respond with ONE short sentence.\n- Do NOT repeat, restate, or summarize what others said — especially the briefing. Add only YOUR distinct angle.\n- Speak in your own voice as ${agentName}. Two agents must never say the same thing.\n- NEVER use markdown or bullet points. Speak naturally.`;
+    systemPrompt += `\n\nYou are ${agentName} in a live staff meeting. The other agents are: ${others}. Shannon is the moderator.\n\nMEETING RULES:\n- If Shannon says YOUR name and asks you to expand, give a fuller answer (3-5 sentences).\n- If Shannon addresses ANOTHER agent and NOT you, respond with ONLY "---"\n- If it's a general question to everyone, answer in 1-2 sentences FROM YOUR SPECIALTY ONLY. ${agentName} must answer the way only ${agentName} would — name a specific thing from your domain (a lead, a deadline, a system, a deployment, a lesson). Generic answers that any agent could give are forbidden.\n- Read the transcript before answering. If another agent already made your point, do NOT rephrase it — either add something genuinely new or respond with ONLY "---". Passing is better than repeating.\n- NEVER use markdown or bullet points. Speak naturally.`;
   }
 
-  // Load conversation history — skipped in meeting mode, where the shared
-  // transcript already carries the context. Saves a DB round-trip and keeps
-  // the prompt small so responses start faster.
-  const history = request.meetingMode ? [] : await loadHistory(request.agentId, sessionId);
+  // Conversation history is each agent's individual memory — it's what makes
+  // their answers diverge. In meeting mode load a smaller slice (the shared
+  // transcript carries the rest) so responses stay fast but distinct.
+  const history = await loadHistory(request.agentId, sessionId, request.meetingMode ? 12 : 40);
   const messages = [...history, { role: "user" as const, content: request.message }];
 
   // In meeting mode, use Haiku for speed and cap tokens for snappy responses
