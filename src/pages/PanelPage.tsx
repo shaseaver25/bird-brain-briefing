@@ -189,13 +189,26 @@ export default function PanelPage() {
 
   const scribe = useScribe({
     modelId: "scribe_v2_realtime",
-    commitStrategy: "vad" as any,
+    commitStrategy: "manual" as any,
     keyterms: panelistKeyterms,
     onPartialTranscript: (d) => {
       partialRef.current = d.text;
       setPartial(d.text);
+      // Reset silence timer on every new partial transcript
+      if (silenceTimerRef.current) {
+        window.clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+      silenceTimerRef.current = window.setTimeout(() => {
+        silenceTimerRef.current = null;
+        commitRef.current();
+      }, SILENCE_MS);
     },
     onCommittedTranscript: (d) => {
+      if (silenceTimerRef.current) {
+        window.clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
       if (finishTimerRef.current) {
         window.clearTimeout(finishTimerRef.current);
         finishTimerRef.current = null;
@@ -213,11 +226,23 @@ export default function PanelPage() {
     },
   });
 
+  commitRef.current = () => {
+    try {
+      scribe.commit();
+    } catch (e) {
+      console.warn("[panel] auto-commit failed:", e);
+    }
+  };
+
   const stopMic = useCallback(() => {
     scribe.disconnect();
     if (finishTimerRef.current) {
       window.clearTimeout(finishTimerRef.current);
       finishTimerRef.current = null;
+    }
+    if (silenceTimerRef.current) {
+      window.clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
     }
     setFinishing(false);
     finishRequestedRef.current = false;
