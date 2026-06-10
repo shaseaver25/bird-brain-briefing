@@ -382,6 +382,7 @@ export default function PanelPage() {
             {panelists.map((p) => {
               const isActive = activeAgentId === p.id;
               const isThinking = thinkingAgentId === p.id;
+              const isRaised = raisedHands.has(p.id);
               const grad = colorFor.get(p.id) ?? PANEL_COLORS[0];
               return (
                 <Card
@@ -391,9 +392,15 @@ export default function PanelPage() {
                     grad,
                     isActive && "ring-4 ring-offset-2 ring-offset-background scale-[1.02] shadow-2xl",
                     isThinking && "ring-2 ring-offset-1 ring-offset-background animate-pulse",
-                    !isActive && !isThinking && "ring-1 ring-border/40",
+                    isRaised && !isActive && !isThinking && "ring-2 ring-amber-400 ring-offset-2 ring-offset-background shadow-lg shadow-amber-400/30 animate-pulse",
+                    !isActive && !isThinking && !isRaised && "ring-1 ring-border/40",
                   )}
                 >
+                  {isRaised && (
+                    <div className="absolute -top-2 -right-2 h-8 w-8 rounded-full bg-amber-400 text-amber-950 flex items-center justify-center shadow-lg">
+                      <Hand className="h-4 w-4" />
+                    </div>
+                  )}
                   <div className="flex items-start gap-3">
                     <div className="h-14 w-14 rounded-full bg-background/80 backdrop-blur flex items-center justify-center text-lg font-bold border">
                       {initials(p.name)}
