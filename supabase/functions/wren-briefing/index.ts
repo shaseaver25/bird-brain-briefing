@@ -1,5 +1,4 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.32.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -84,7 +83,7 @@ async function compileBriefing(): Promise<void> {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
-  const anthropic = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY")! });
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 
   // Fetch all data sources in parallel
   const accessToken = await getGoogleAccessToken(
@@ -161,13 +160,18 @@ INSTRUCTIONS:
 - Keep it under 120 words — this will be spoken aloud
 - Do NOT use bullet points, headers, or markdown — pure spoken prose`;
 
-  const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 512,
-    messages: [{ role: "user", content: prompt }],
+  const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      max_tokens: 512,
+      messages: [{ role: "user", content: prompt }],
+    }),
   });
 
-  const briefingText = response.content.find((b) => b.type === "text")?.text ?? "";
+  const aiData = await aiRes.json();
+  const briefingText = aiData.choices?.[0]?.message?.content ?? "";
 
   // Save to widget_data
   await supabase.from("widget_data").upsert({
