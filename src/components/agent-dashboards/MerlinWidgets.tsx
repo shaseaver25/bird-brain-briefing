@@ -199,11 +199,15 @@ function HackathonWidget({
   tasks,
   updatingTask,
   toggleTask,
+  markDone,
+  deleteTask,
 }: {
   project: Project;
   tasks: ProjectTask[];
   updatingTask: string | null;
   toggleTask: (t: ProjectTask) => void;
+  markDone: (t: ProjectTask) => void;
+  deleteTask: (t: ProjectTask) => void;
 }) {
   const daysLeft = project.deadline
     ? Math.ceil(
@@ -251,19 +255,24 @@ function HackathonWidget({
             const Icon = cfg.icon;
             const isUpdating = updatingTask === task.id;
             return (
-              <button
+              <div
                 key={task.id}
-                onClick={() => toggleTask(task)}
-                disabled={isUpdating}
                 className="w-full flex items-center gap-2.5 text-left p-2 rounded-md hover:bg-muted/50 transition-colors group"
               >
-                {isUpdating ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
-                ) : (
-                  <Icon
-                    className={`h-4 w-4 shrink-0 ${cfg.color} ${task.status === "in_progress" ? "animate-spin" : ""}`}
-                  />
-                )}
+                <button
+                  onClick={() => toggleTask(task)}
+                  disabled={isUpdating}
+                  title="Cycle status"
+                  className="shrink-0"
+                >
+                  {isUpdating ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  ) : (
+                    <Icon
+                      className={`h-4 w-4 ${cfg.color} ${task.status === "in_progress" ? "animate-spin" : ""}`}
+                    />
+                  )}
+                </button>
                 <span
                   className={`text-sm flex-1 ${task.status === "done" ? "line-through text-muted-foreground" : ""}`}
                 >
@@ -274,7 +283,25 @@ function HackathonWidget({
                     {new Date(task.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                   </span>
                 )}
-              </button>
+                <button
+                  onClick={() => markDone(task)}
+                  disabled={isUpdating}
+                  title={task.status === "done" ? "Mark as to-do" : "Mark as finished"}
+                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-emerald-500 transition-opacity shrink-0"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm(`Delete task "${task.title}"?`)) deleteTask(task);
+                  }}
+                  disabled={isUpdating}
+                  title="Delete task"
+                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity shrink-0"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
             );
           })}
         </div>
