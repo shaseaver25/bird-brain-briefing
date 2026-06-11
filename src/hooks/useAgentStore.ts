@@ -22,7 +22,7 @@ interface StoreState {
 
 const STORAGE_KEY = "staff-meeting-config";
 
-const DEFAULT_AGENTS: AgentConfig[] = [
+export const DEFAULT_AGENTS: AgentConfig[] = [
   {
     id: "wren",
     name: "Wren",

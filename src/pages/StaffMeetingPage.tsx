@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { AgentCard } from '@/components/AgentCard';
 import { AgentCardSkeleton } from '@/components/AgentCardSkeleton';
 import type { Agent } from '@/types/kiro';
+import { DEFAULT_AGENTS } from '@/hooks/useAgentStore';
 
 export default function StaffMeetingPage() {
   const navigate = useNavigate();
@@ -23,7 +24,18 @@ export default function StaffMeetingPage() {
       if (e) {
         setError(new Error(e.message));
       } else {
-        setAgents((data ?? []) as unknown as Agent[]);
+        const dbAgents = (data ?? []) as unknown as Agent[];
+        const dbIds = new Set(dbAgents.map(a => a.id));
+        const fallbackAgents: Agent[] = DEFAULT_AGENTS
+          .filter(d => !dbIds.has(d.id))
+          .map(d => ({
+            id: d.id,
+            name: d.name,
+            role: d.role,
+            description: d.role,
+            status: 'active' as const,
+          }));
+        setAgents([...dbAgents, ...fallbackAgents]);
       }
       setLoading(false);
     }
