@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { AgentCard } from '@/components/AgentCard';
 import { AgentCardSkeleton } from '@/components/AgentCardSkeleton';
 import type { Agent } from '@/types/kiro';
+import { DEFAULT_AGENTS } from '@/hooks/useAgentStore';
 
 export default function StaffMeetingPage() {
   const navigate = useNavigate();
