@@ -1,190 +1,226 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.32.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Map business slug to CRM credentials
-function getCrmClient(business: string) {
-  const configs: Record<string, { url: string; key: string }> = {
-    realpath: {
-      url: Deno.env.get("CRM_REALPATH_URL")!,
-      key: Deno.env.get("CRM_REALPATH_SERVICE_KEY")!,
-    },
-    tailoredu: {
-      url: Deno.env.get("CRM_TAILOREDU_URL")!,
-      key: Deno.env.get("CRM_TAILOREDU_SERVICE_KEY")!,
-    },
-    aiwhisperers: {
-      url: Deno.env.get("CRM_AIWHISPERERS_URL")!,
-      key: Deno.env.get("CRM_AIWHISPERERS_SERVICE_KEY")!,
-    },
+// Per-business Apollo search defaults (mirror saleshawk-daily)
+const PRESETS: Record<
+  string,
+  { person_titles: string[]; organization_num_employees_ranges?: string[] }
+> = {
+  realpath: {
+    person_titles: [
+      "Superintendent",
+      "Assistant Superintendent",
+      "Curriculum Director",
+      "Director of Technology",
+      "Director of Teaching and Learning",
+    ],
+  },
+  tailoredu: {
+    person_titles: ["Owner", "CEO", "COO", "Operations Manager", "Director of Operations", "Founder"],
+    organization_num_employees_ranges: ["5,200"],
+  },
+  stonearch: {
+    person_titles: [
+      "Owner",
+      "Executive Director",
+      "CEO",
+      "Founder",
+      "President",
+      "Director of Human Resources",
+      "Learning and Development Manager",
+    ],
+    organization_num_employees_ranges: ["1,50"],
+  },
+};
+
+const APOLLO_LOCATIONS = [
+  "Minneapolis, Minnesota, United States",
+  "Saint Paul, Minnesota, United States",
+];
+
+interface ApolloPerson {
+  id: string;
+  first_name?: string;
+  last_name?: string;
+  name?: string;
+  title?: string;
+  linkedin_url?: string | null;
+  email?: string | null;
+  organization?: { name?: string; website_url?: string | null } | null;
+}
+
+async function apolloSearch(
+  preset: typeof PRESETS[string],
+  per_page: number
+): Promise<ApolloPerson[]> {
+  const body: Record<string, unknown> = {
+    person_titles: preset.person_titles,
+    person_locations: APOLLO_LOCATIONS,
+    page: 1,
+    per_page,
   };
-  const config = configs[business];
-  if (!config) throw new Error(`Unknown business: ${business}`);
-  return createClient(config.url, config.key);
+  if (preset.organization_num_employees_ranges) {
+    body.organization_num_employees_ranges = preset.organization_num_employees_ranges;
+  }
+  const res = await fetch("https://api.apollo.io/api/v1/mixed_people/search", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-cache",
+      "X-Api-Key": Deno.env.get("APOLLO_API_KEY")!,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Apollo search ${res.status}: ${await res.text()}`);
+  const json = await res.json();
+  return (json.people ?? []) as ApolloPerson[];
 }
 
-// Hunter.io email finder — returns null if not found or over free limit
-async function findEmail(firstName: string, lastName: string, domain: string): Promise<string | null> {
-  const apiKey = Deno.env.get("HUNTER_API_KEY");
-  if (!apiKey || !domain) return null;
+async function apolloReveal(id: string): Promise<string | null> {
   try {
-    const params = new URLSearchParams({ first_name: firstName, last_name: lastName, domain, api_key: apiKey });
-    const res = await fetch(`https://api.hunter.io/v2/email-finder?${params}`);
+    const res = await fetch("https://api.apollo.io/api/v1/people/match", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
+        "X-Api-Key": Deno.env.get("APOLLO_API_KEY")!,
+      },
+      body: JSON.stringify({ id, reveal_personal_emails: true }),
+    });
     if (!res.ok) return null;
-    const { data } = await res.json();
-    return data?.email ?? null;
+    const json = await res.json();
+    return (json.person?.email as string | undefined) ?? null;
   } catch {
     return null;
   }
 }
 
-// Parse "First Last" into parts
-function splitName(name: string): { first: string; last: string } {
-  const parts = name.trim().split(/\s+/);
-  return { first: parts[0] ?? "", last: parts.slice(1).join(" ") || parts[0] };
-}
-
-// Extract domain from a URL
-function urlToDomain(url: string): string | null {
+async function scorePeople(
+  business: string,
+  people: ApolloPerson[]
+): Promise<Map<string, { score: number; note: string }>> {
+  const map = new Map<string, { score: number; note: string }>();
+  if (people.length === 0) return map;
+  const summary = people.map((p) => ({
+    apollo_id: p.id,
+    name: p.name,
+    title: p.title,
+    company: p.organization?.name,
+    linkedin_url: p.linkedin_url,
+  }));
   try {
-    return new URL(url.startsWith("http") ? url : `https://${url}`).hostname.replace(/^www\./, "");
-  } catch {
-    return null;
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${Deno.env.get("LOVABLE_API_KEY")!}`,
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are SalesHawk, scoring leads for member company '" +
+              business +
+              "'. Return ONLY JSON of the form {\"results\":[{\"apollo_id\":\"...\",\"score\":0-100,\"note\":\"one sentence on why they fit\"}]}.",
+          },
+          {
+            role: "user",
+            content: `Score these prospects 0-100 for fit with member company "${business}" and give one short note each.\n\n${JSON.stringify(summary)}`,
+          },
+        ],
+      }),
+    });
+    if (!res.ok) throw new Error(`Gateway ${res.status}: ${await res.text()}`);
+    const json = await res.json();
+    const parsed = JSON.parse(json.choices?.[0]?.message?.content ?? "{}");
+    const arr = (parsed.results ?? parsed.scores ?? []) as Array<{
+      apollo_id: string;
+      score: number;
+      note: string;
+    }>;
+    for (const s of arr) if (s?.apollo_id) map.set(s.apollo_id, { score: s.score, note: s.note });
+  } catch (err) {
+    console.error(`scoring failed [${business}]:`, err);
   }
+  return map;
 }
 
-interface Prospect {
-  name: string;
-  title: string;
-  company: string;
-  website: string | null;
-  linkedin_url: string | null;
-  notes: string;
-  score: number;
-}
-
-// Use Claude with web_search to find prospects matching an ICP
-async function researchProspects(icp: string, count: number, business: string): Promise<Prospect[]> {
-  const anthropic = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY")! });
-
-  const systemPrompt = `You are SalesHawk, an elite sales researcher. Your job is to find real, specific, named individuals who match an ideal customer profile (ICP).
-
-Rules:
-- Only return real people you can verify exist via web search
-- Always include their company website domain when you can find it
-- Include LinkedIn URLs when findable
-- Score each lead 0–100 based on ICP fit (title match, company size, location, engagement signals)
-- Notes should include WHY this person is a good fit — specific signals like mutual connections, recent posts, company initiatives
-- Return ONLY a valid JSON array, no other text`;
-
-  const userPrompt = `Find ${count} prospects for this ICP:
-
-${icp}
-
-Business context: ${business}
-
-Search for real people, verify they exist, find their company websites. Return a JSON array:
-[
-  {
-    "name": "Full Name",
-    "title": "Job Title",
-    "company": "Company Name",
-    "website": "company.com or null",
-    "linkedin_url": "https://linkedin.com/in/handle or null",
-    "notes": "Why this person fits — specific signals",
-    "score": 75
-  }
-]`;
-
-  // Run Claude with web search enabled
-  const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 4096,
-    tools: [{ type: "web_search_20250305", name: "web_search" }],
-    system: systemPrompt,
-    messages: [{ role: "user", content: userPrompt }],
-  } as any);
-
-  // Extract the final text block (after tool use)
-  let jsonText = "";
-  for (const block of response.content) {
-    if (block.type === "text") jsonText = block.text;
-  }
-
-  // Parse JSON from Claude's response
-  const match = jsonText.match(/\[[\s\S]*\]/);
-  if (!match) throw new Error("Claude did not return a valid JSON array");
-  return JSON.parse(match[0]) as Prospect[];
+function getStoneArchClient() {
+  const url = Deno.env.get("STONEARCH_CRM_URL") ?? "https://vvaqdqzpbtlfucsoiupc.supabase.co";
+  return createClient(url, Deno.env.get("STONEARCH_CRM_SERVICE_KEY")!);
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { business, icp, count = 10 } = await req.json();
+    const { business, count = 10 } = await req.json();
 
-    if (!business || !icp) {
+    const preset = PRESETS[business];
+    if (!preset) {
       return new Response(
-        JSON.stringify({ error: "business and icp are required" }),
+        JSON.stringify({ error: `business must be one of: ${Object.keys(PRESETS).join(", ")}` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const validBusinesses = ["realpath", "tailoredu", "aiwhisperers"];
-    if (!validBusinesses.includes(business)) {
-      return new Response(
-        JSON.stringify({ error: `business must be one of: ${validBusinesses.join(", ")}` }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    console.log(`SalesHawk prospecting (Apollo): ${count} leads for ${business}`);
 
-    console.log(`SalesHawk prospecting: ${count} leads for ${business}`);
-    console.log(`ICP: ${icp}`);
+    const people = await apolloSearch(preset, count);
+    console.log(`Apollo returned ${people.length} people`);
 
-    // Phase 1: Research prospects via Claude + web search
-    const prospects = await researchProspects(icp, count, business);
-    console.log(`Found ${prospects.length} prospects`);
+    const scores = await scorePeople(business, people);
+    const stoneArch = getStoneArchClient();
+    const results: Array<Record<string, unknown>> = [];
 
-    // Phase 2: Enrich emails via Hunter.io + build lead rows
-    const crm = getCrmClient(business);
-    const results = [];
+    for (const person of people) {
+      const scored = scores.get(person.id);
+      const score = scored?.score ?? 50;
+      const note = scored?.note ?? "";
 
-    for (const prospect of prospects) {
-      // Try to find email via Hunter.io
-      let email: string | null = null;
-      const domain = prospect.website ? urlToDomain(prospect.website) : null;
-      if (domain) {
-        const { first, last } = splitName(prospect.name);
-        email = await findEmail(first, last, domain);
+      let email: string | null = person.email ?? null;
+      if (!email || email === "email_not_unlocked@domain.com") {
+        email = await apolloReveal(person.id);
       }
 
-      const leadRow = {
-        business,
-        name: prospect.name,
-        email,
-        company: prospect.company || null,
-        title: prospect.title || null,
-        phone: null,
-        linkedin_url: prospect.linkedin_url || null,
-        source: "ai_agent",
-        notes: prospect.notes || null,
-        score: prospect.score ?? 50,
-        status: "new",
-      };
+      const name =
+        person.name ?? `${person.first_name ?? ""} ${person.last_name ?? ""}`.trim();
 
-      // Phase 3: Insert into CRM
-      const { data, error } = await crm.from("leads").insert(leadRow).select("id").single();
+      const { data, error } = await stoneArch
+        .from("prospect_leads")
+        .upsert(
+          {
+            apollo_id: person.id,
+            member_company: business,
+            contact_name: name,
+            title: person.title ?? null,
+            company: person.organization?.name ?? null,
+            linkedin_url: person.linkedin_url ?? null,
+            email,
+            source: "saleshawk_apollo",
+            status: "new",
+            lead_score: score,
+            notes: note,
+            ai_insights: note,
+            enrichment_data: person,
+          },
+          { onConflict: "apollo_id" }
+        )
+        .select("apollo_id")
+        .maybeSingle();
 
       if (error) {
-        console.error(`Failed to insert ${prospect.name}:`, error.message);
-        results.push({ name: prospect.name, status: "error", error: error.message });
+        console.error(`Failed to upsert ${name}:`, error.message);
+        results.push({ name, status: "error", error: error.message });
       } else {
-        console.log(`Inserted lead: ${prospect.name} (${data.id})`);
-        results.push({ name: prospect.name, status: "inserted", id: data.id, email });
+        results.push({ name, status: "inserted", id: data?.apollo_id ?? person.id, email });
       }
     }
 
@@ -194,16 +230,18 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         ok: true,
-        summary: `${inserted} leads added to ${business} CRM${failed > 0 ? `, ${failed} failed` : ""}`,
+        summary: `${inserted} leads added to Stone Arch CRM for ${business}${
+          failed > 0 ? `, ${failed} failed` : ""
+        }`,
         results,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
     console.error("saleshawk-prospect error:", err);
-    return new Response(
-      JSON.stringify({ error: String(err) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: String(err) }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
