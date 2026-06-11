@@ -51,13 +51,13 @@ const FOLLOW_UPS = [
 const BUSINESS_COLORS: Record<string, string> = {
   realpath: "text-blue-500",
   tailoredu: "text-emerald-500",
-  aiwhisperers: "text-purple-500",
+  stonearch: "text-purple-500",
 };
 
 const BUSINESS_LABELS: Record<string, string> = {
   realpath: "RealPath",
   tailoredu: "TailoredU",
-  aiwhisperers: "AI Whisperers",
+  stonearch: "Stone Arch",
 };
 
 // --- Live Today's Finds Hook ---
@@ -266,7 +266,7 @@ function TodaysFindsWidget() {
   const byBusiness = {
     realpath: finds.filter((f) => f.business === "realpath"),
     tailoredu: finds.filter((f) => f.business === "tailoredu"),
-    aiwhisperers: finds.filter((f) => f.business === "aiwhisperers"),
+    stonearch: finds.filter((f) => f.business === "stonearch"),
   };
   const lastRunTime = data?.run_time
     ? new Date(data.run_time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" })
@@ -325,7 +325,7 @@ function TodaysFindsWidget() {
           </div>
         ) : (
           <div className="space-y-6">
-            {(["realpath", "tailoredu", "aiwhisperers"] as const).map((biz) => {
+            {(["realpath", "tailoredu", "stonearch"] as const).map((biz) => {
               const leads = byBusiness[biz];
               if (!leads.length) return null;
               return (
