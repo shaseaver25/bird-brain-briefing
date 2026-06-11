@@ -84,14 +84,35 @@ export default function MockingJayWidgets() {
 
   const handleRunNow = async () => {
     setRunning(true);
+    const startedAt = lastUpdated ? new Date(lastUpdated).getTime() : 0;
     try {
       await supabase.functions.invoke('mockingjay', {
         body: { topic: topic.trim() || null },
       });
-      setTimeout(() => {
-        fetchData();
-        setRunning(false);
-      }, 8000);
+      // Poll widget_data until updated_at advances past startedAt (or timeout)
+      const deadline = Date.now() + 120000; // 2 min
+      const poll = async () => {
+        const { data } = await supabase
+          .from('widget_data')
+          .select('updated_at')
+          .eq('agent_id', AGENT_ID)
+          .eq('widget_key', 'post_queue')
+          .maybeSingle();
+        const ts = data?.updated_at ? new Date(data.updated_at).getTime() : 0;
+        if (ts > startedAt) {
+          await fetchData();
+          setRunning(false);
+          return;
+        }
+        if (Date.now() > deadline) {
+          await fetchData();
+          setRunning(false);
+          console.warn('MockingJay run timed out waiting for fresh data');
+          return;
+        }
+        setTimeout(poll, 3000);
+      };
+      setTimeout(poll, 4000);
     } catch (err) {
       console.error('MockingJay run error:', err);
       setRunning(false);
