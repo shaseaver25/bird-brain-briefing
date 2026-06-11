@@ -15,6 +15,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { Layers } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -312,6 +313,60 @@ function HackathonWidget({
 
 // ── Project Board ────────────────────────────────────────────────────────────
 
+interface CrmCard {
+  id: string;
+  board_id: string;
+  board_name: string;
+  column_title: string | null;
+  title: string;
+  description: string | null;
+  priority: "high" | "medium" | "low" | null;
+  due_date: string | null;
+  status: "todo" | "in_progress" | "done" | "blocked";
+  is_blocked: boolean;
+  completed_at: string | null;
+}
+
+interface CrmBoardSummary {
+  board_id: string;
+  name: string;
+  description: string | null;
+  theme_color: string | null;
+  priority: "high" | "medium" | "low";
+  my_cards: CrmCard[];
+  total: number;
+  done: number;
+  open: number;
+  blocked: number;
+  completion_pct: number;
+  next_due: string | null;
+}
+
+function useCrmBoards() {
+  const [boards, setBoards] = useState<CrmBoardSummary[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("merlin-crm-tasks");
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setBoards((data?.boards ?? []) as CrmBoardSummary[]);
+    } catch (e) {
+      setError(String((e as Error)?.message ?? e));
+      setBoards([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+  return { boards, loading, error, reload: load };
+}
+
 function ProjectBoardWidget({
   projects,
   tasks,
@@ -320,17 +375,37 @@ function ProjectBoardWidget({
   tasks: ProjectTask[];
 }) {
   const nonHackathon = projects.filter((p) => p.id !== HACKATHON_ID);
+  const { boards: crmBoards, loading: crmLoading, error: crmError, reload: reloadCrm } = useCrmBoards();
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleBoard = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  const totalOpenCrm = (crmBoards ?? []).reduce((s, b) => s + b.open, 0);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
-          <ClipboardList className="h-5 w-5 text-amber-500" />
-          Project Board
-        </CardTitle>
-        <CardDescription>
-          {nonHackathon.filter((p) => p.status === "active").length} active projects
-        </CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <ClipboardList className="h-5 w-5 text-amber-500" />
+              Project Board
+            </CardTitle>
+            <CardDescription>
+              {nonHackathon.filter((p) => p.status === "active").length} active projects
+              {crmBoards && crmBoards.length > 0 && (
+                <> · {totalOpenCrm} open Stone Arch task{totalOpenCrm === 1 ? "" : "s"}</>
+              )}
+            </CardDescription>
+          </div>
+          <Button variant="ghost" size="sm" onClick={reloadCrm} className="gap-1.5 text-xs text-muted-foreground">
+            <RefreshCw className={`h-3 w-3 ${crmLoading ? "animate-spin" : ""}`} />
+            CRM
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
         {nonHackathon.map((project) => {
@@ -373,6 +448,88 @@ function ProjectBoardWidget({
             </div>
           );
         })}
+
+        {/* Stone Arch CRM boards (cards assigned to me) */}
+        {crmError && (
+          <p className="text-xs text-red-500 pt-2">Could not load Stone Arch tasks: {crmError}</p>
+        )}
+        {crmBoards && crmBoards.length > 0 && (
+          <div className="pt-3 mt-3 border-t border-border space-y-2">
+            <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <Layers className="h-3 w-3" />
+              Stone Arch CRM — assigned to you
+            </p>
+            {crmBoards.map((b) => {
+              const isOpen = expanded.has(b.board_id);
+              const open = b.my_cards.filter((c) => c.status !== "done");
+              return (
+                <div key={b.board_id} className="border-b border-border last:border-0">
+                  <button
+                    onClick={() => toggleBoard(b.board_id)}
+                    className="w-full flex items-center gap-3 py-2.5 text-left hover:bg-muted/40 rounded-md px-1 transition-colors"
+                  >
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: b.theme_color ?? "hsl(var(--primary))" }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium truncate">{b.name}</p>
+                        {b.blocked > 0 && (
+                          <Badge variant="destructive" className="text-[10px] shrink-0">
+                            {b.blocked} blocked
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Stone Arch CRM &middot; {b.open} open / {b.total} total
+                        {b.next_due && (
+                          <> &middot; next {new Date(b.next_due).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</>
+                        )}
+                      </p>
+                    </div>
+                    <div className="w-28 space-y-1 shrink-0">
+                      <Progress value={b.completion_pct} className="h-1.5" />
+                      <p className="text-[10px] text-right text-muted-foreground">{b.completion_pct}%</p>
+                    </div>
+                    <Badge variant="outline" className={`text-[10px] shrink-0 ${PRIORITY_STYLES[b.priority ?? "medium"]}`}>
+                      {b.priority ?? "medium"}
+                    </Badge>
+                  </button>
+                  {isOpen && (
+                    <div className="pl-6 pb-3 space-y-1.5">
+                      {open.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No open cards. 🎉</p>
+                      ) : (
+                        open.map((c) => {
+                          const cfg = TASK_STATUS_CONFIG[c.status];
+                          const Icon = cfg.icon;
+                          return (
+                            <div key={c.id} className="flex items-start gap-2 text-sm">
+                              <Icon className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${cfg.color} ${c.status === "in_progress" ? "animate-spin" : ""}`} />
+                              <span className="flex-1">{c.title}</span>
+                              {c.column_title && (
+                                <span className="text-[10px] font-mono text-muted-foreground shrink-0">{c.column_title}</span>
+                              )}
+                              {c.due_date && (
+                                <span className="text-[10px] text-muted-foreground font-mono shrink-0">
+                                  {new Date(c.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {crmBoards && crmBoards.length === 0 && !crmError && !crmLoading && (
+          <p className="text-xs text-muted-foreground pt-2">No Stone Arch CRM cards assigned to you right now.</p>
+        )}
       </CardContent>
     </Card>
   );
