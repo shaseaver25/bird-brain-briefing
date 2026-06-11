@@ -89,6 +89,17 @@ const DEFAULT_AGENTS: AgentConfig[] = [
     accentColor: "30 80% 50%",
     speakOrder: 6,
   },
+  {
+    id: "mockingjay",
+    name: "MockingJay",
+    emoji: "🐦",
+    role: "Social Media Agent",
+    voiceId: "ErXwobaYiN019PkySvjV",
+    agentId: "mockingjay",
+    apiUrl: "",
+    accentColor: "330 80% 60%",
+    speakOrder: 7,
+  },
 ];
 
 function mergeWithDefaults(agents: AgentConfig[]): AgentConfig[] {
