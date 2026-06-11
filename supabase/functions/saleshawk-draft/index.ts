@@ -1,5 +1,3 @@
-import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.32.1";
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -16,10 +14,10 @@ const BUSINESS_CONTEXT: Record<string, { sender: string; offer: string; cta: str
     offer: "custom software builds, CRM systems, and AI workflow automation for small and mid-sized businesses",
     cta: "a quick call to hear about your current systems and see if there's a fit",
   },
-  aiwhisperers: {
-    sender: "Shannon Seaver, founder of The AI Whisperers",
-    offer: "practical AI training and consulting that helps business owners and nonprofits put AI to work without the overwhelm",
-    cta: "a 20-minute intro call to learn about your goals and share what's working for others like you",
+  stonearch: {
+    sender: "Shannon Seaver, founder of Stone Arch Collective",
+    offer: "a community-driven AI training and peer-learning program that helps business and nonprofit leaders build practical AI skills together",
+    cta: "a quick intro call to see whether Stone Arch's community and training would be a fit",
   },
 };
 
@@ -43,8 +41,6 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const anthropic = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY")! });
 
     const prompt = `You are SalesHawk, writing a cold outreach email on behalf of ${ctx.sender}.
 
@@ -70,16 +66,30 @@ Format your response as JSON only:
   "body": "Full email body with line breaks as \\n"
 }`;
 
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 1024,
-      system: "You are SalesHawk, an expert sales copywriter. Write concise, personalized cold emails that get replies. Respond with JSON only.",
-      messages: [{ role: "user", content: prompt }],
+    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${Deno.env.get("LOVABLE_API_KEY")!}`,
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        max_tokens: 1024,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are SalesHawk, an expert sales copywriter. Write concise, personalized cold emails that get replies. Respond with JSON only.",
+          },
+          { role: "user", content: prompt },
+        ],
+      }),
     });
-
-    const text = response.content.find((b) => b.type === "text")?.text ?? "";
+    if (!aiRes.ok) throw new Error(`Gateway ${aiRes.status}: ${await aiRes.text()}`);
+    const aiJson = await aiRes.json();
+    const text: string = aiJson.choices?.[0]?.message?.content ?? "";
     const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("Claude did not return valid JSON");
+    if (!match) throw new Error("AI did not return valid JSON");
 
     const draft = JSON.parse(match[0]) as { subject: string; body: string };
 
