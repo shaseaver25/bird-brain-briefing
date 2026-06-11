@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Newspaper, RefreshCw, ExternalLink } from "lucide-react";
+import { Newspaper, RefreshCw, ExternalLink, Star } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 // --- Types ---
@@ -18,11 +18,52 @@ interface IntelArticle {
   found_at: string;
 }
 
-const RELEVANCE_STYLES = {
-  high: "bg-red-500/10 text-red-600 border-red-500/20",
-  medium: "bg-amber-500/10 text-amber-600 border-amber-500/20",
-  low: "bg-muted text-muted-foreground border-border",
+type PercentileTier = "top10" | "top25" | "top50" | "below50";
+
+const TIER_STYLES: Record<PercentileTier, string> = {
+  top10: "bg-amber-500/15 text-amber-700 border-amber-500/40",
+  top25: "bg-cyan-500/10 text-cyan-600 border-cyan-500/20",
+  top50: "bg-muted text-foreground/70 border-border",
+  below50: "bg-muted/40 text-muted-foreground border-border",
 };
+
+const TIER_LABELS: Record<PercentileTier, string> = {
+  top10: "Top 10%",
+  top25: "Top 25%",
+  top50: "Top 50%",
+  below50: "Below 50%",
+};
+
+const RELEVANCE_SCORE = { high: 3, medium: 2, low: 1 } as const;
+
+function computeTiers(articles: IntelArticle[]): Map<string, PercentileTier> {
+  const tiers = new Map<string, PercentileTier>();
+  const byTopic = new Map<string, IntelArticle[]>();
+  for (const a of articles) {
+    const list = byTopic.get(a.topic_id) ?? [];
+    list.push(a);
+    byTopic.set(a.topic_id, list);
+  }
+  for (const [, list] of byTopic) {
+    const sorted = [...list].sort((a, b) => {
+      const ra = RELEVANCE_SCORE[a.relevance] ?? 0;
+      const rb = RELEVANCE_SCORE[b.relevance] ?? 0;
+      if (rb !== ra) return rb - ra;
+      return new Date(b.found_at).getTime() - new Date(a.found_at).getTime();
+    });
+    const n = sorted.length;
+    sorted.forEach((a, idx) => {
+      const pct = (idx + 1) / n; // 1 = top, n/n = bottom
+      let tier: PercentileTier;
+      if (pct <= 0.1 || (n <= 10 && idx === 0)) tier = "top10";
+      else if (pct <= 0.25) tier = "top25";
+      else if (pct <= 0.5) tier = "top50";
+      else tier = "below50";
+      tiers.set(a.id, tier);
+    });
+  }
+  return tiers;
+}
 
 const TOPIC_COLORS: Record<string, string> = {
   ai_k12: "text-blue-500",
@@ -107,7 +148,12 @@ function useKiroIntel() {
 function IntelFeedWidget() {
   const { articles, allArticles, topics, loading, running, lastUpdated, activeFilter, setActiveFilter, runNow } = useKiroIntel();
 
-  const highCount = allArticles.filter((a) => a.relevance === "high").length;
+  const tiers = computeTiers(allArticles);
+  const topCount = Array.from(tiers.values()).filter((t) => t === "top10").length;
+
+  // Split visible articles: top 10% featured, then the rest
+  const featured = articles.filter((a) => tiers.get(a.id) === "top10");
+  const rest = articles.filter((a) => tiers.get(a.id) !== "top10");
 
   return (
     <Card className="border-cyan-500/30">
@@ -115,7 +161,7 @@ function IntelFeedWidget() {
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
             <Newspaper className="h-5 w-5 text-cyan-500" />
-            Intelligence Feed
+            Warbler — Intelligence Feed
           </CardTitle>
           <div className="flex items-center gap-3">
             {lastUpdated && (
@@ -135,7 +181,7 @@ function IntelFeedWidget() {
         </div>
         <CardDescription>
           {loading ? "Loading…" : running ? "Kiro is scanning sources…" :
-            `${allArticles.length} articles in the last 2 weeks${highCount > 0 ? ` · ${highCount} high relevance` : ""}`}
+            `${allArticles.length} articles in the last 2 weeks${topCount > 0 ? ` · ${topCount} top-10% signal${topCount === 1 ? "" : "s"}` : ""}`}
         </CardDescription>
 
         {/* Topic filter tabs */}
@@ -180,43 +226,83 @@ function IntelFeedWidget() {
             <p className="text-xs text-muted-foreground mt-1">Runs automatically at 7 AM, or click Scan Now.</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {articles.map((article) => (
-              <div key={article.id} className="p-3 rounded-lg border border-border bg-card hover:border-cyan-500/30 transition-colors">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className={`text-[10px] font-mono font-semibold uppercase tracking-wider ${TOPIC_COLORS[article.topic_id] ?? "text-muted-foreground"}`}>
-                        {article.topic_label}
-                      </span>
-                      {article.business !== "all" && (
-                        <span className="text-[10px] text-muted-foreground font-mono">→ {BUSINESS_LABELS[article.business] ?? article.business}</span>
-                      )}
-                    </div>
-                    <a
-                      href={article.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm font-medium hover:text-cyan-500 transition-colors flex items-start gap-1 group"
-                    >
-                      <span>{article.title}</span>
-                      <ExternalLink className="h-3 w-3 shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </a>
-                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{article.summary}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded border font-mono ${RELEVANCE_STYLES[article.relevance]}`}>
-                      {article.relevance}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">{article.source}</span>
-                  </div>
+          <div className="space-y-5">
+            {featured.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
+                  <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-amber-700">
+                    Top Signal{featured.length === 1 ? "" : "s"} — Per Category
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {featured.map((article) => (
+                    <ArticleRow key={article.id} article={article} tier={tiers.get(article.id) ?? "below50"} />
+                  ))}
                 </div>
               </div>
-            ))}
+            )}
+            {rest.length > 0 && (
+              <div>
+                {featured.length > 0 && (
+                  <div className="text-[10px] font-mono font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                    Other Signals
+                  </div>
+                )}
+                <div className="space-y-3">
+                  {rest.map((article) => (
+                    <ArticleRow key={article.id} article={article} tier={tiers.get(article.id) ?? "below50"} />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function ArticleRow({ article, tier }: { article: IntelArticle; tier: PercentileTier }) {
+  const isTop = tier === "top10";
+  return (
+    <div
+      className={`p-3 rounded-lg border transition-colors ${
+        isTop
+          ? "border-amber-500/40 bg-amber-500/5 shadow-sm hover:border-amber-500/60"
+          : "border-border bg-card hover:border-cyan-500/30"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            {isTop && <Star className="h-3 w-3 fill-amber-500 text-amber-500 shrink-0" />}
+            <span className={`text-[10px] font-mono font-semibold uppercase tracking-wider ${TOPIC_COLORS[article.topic_id] ?? "text-muted-foreground"}`}>
+              {article.topic_label}
+            </span>
+            {article.business !== "all" && (
+              <span className="text-[10px] text-muted-foreground font-mono">→ {BUSINESS_LABELS[article.business] ?? article.business}</span>
+            )}
+          </div>
+          <a
+            href={article.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`font-medium hover:text-cyan-500 transition-colors flex items-start gap-1 group ${isTop ? "text-base" : "text-sm"}`}
+          >
+            <span>{article.title}</span>
+            <ExternalLink className="h-3 w-3 shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </a>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{article.summary}</p>
+        </div>
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <span className={`text-[10px] px-1.5 py-0.5 rounded border font-mono ${TIER_STYLES[tier]}`}>
+            {TIER_LABELS[tier]}
+          </span>
+          <span className="text-[10px] text-muted-foreground">{article.source}</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
