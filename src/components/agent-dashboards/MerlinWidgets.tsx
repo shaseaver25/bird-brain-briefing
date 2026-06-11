@@ -116,6 +116,18 @@ function useMerlinProjects() {
       blocked: "todo",
     };
     const next = cycle[task.status];
+    await applyStatus(task, next);
+  }
+
+  async function markDone(task: ProjectTask) {
+    if (task.status === "done") {
+      await applyStatus(task, "todo");
+    } else {
+      await applyStatus(task, "done");
+    }
+  }
+
+  async function applyStatus(task: ProjectTask, next: ProjectTask["status"]) {
     setUpdatingTask(task.id);
 
     const { error } = await supabase
@@ -147,7 +159,37 @@ function useMerlinProjects() {
     setUpdatingTask(null);
   }
 
-  return { projects, tasks, loading, updatingTask, toggleTask, reload: loadData };
+  async function deleteTask(task: ProjectTask) {
+    setUpdatingTask(task.id);
+    const { error } = await supabase
+      .from("project_tasks")
+      .delete()
+      .eq("id", task.id);
+    if (!error) {
+      const remaining = tasks.filter((t) => t.id !== task.id);
+      setTasks(remaining);
+      const projectTasks = remaining.filter((t) => t.project_id === task.project_id);
+      const pct = projectTasks.length
+        ? Math.round(
+            (projectTasks.filter((t) => t.status === "done").length /
+              projectTasks.length) *
+              100
+          )
+        : 0;
+      await supabase
+        .from("projects")
+        .update({ completion_pct: pct, updated_at: new Date().toISOString() })
+        .eq("id", task.project_id);
+      setProjects((prev) =>
+        prev.map((p) =>
+          p.id === task.project_id ? { ...p, completion_pct: pct } : p
+        )
+      );
+    }
+    setUpdatingTask(null);
+  }
+
+  return { projects, tasks, loading, updatingTask, toggleTask, markDone, deleteTask, reload: loadData };
 }
 
 // ── Hackathon Hero Widget ─────────────────────────────────────────────────────
