@@ -438,7 +438,7 @@ function TimelineWidget({ projects }: { projects: Project[] }) {
 // ── Root Component ────────────────────────────────────────────────────────────
 
 export default function MerlinWidgets() {
-  const { projects, tasks, loading, updatingTask, toggleTask, reload } =
+  const { projects, tasks, loading, updatingTask, toggleTask, markDone, deleteTask, reload } =
     useMerlinProjects();
 
   const hackathon = projects.find((p) => p.id === HACKATHON_ID);
@@ -475,6 +475,8 @@ export default function MerlinWidgets() {
           tasks={hackathonTasks}
           updatingTask={updatingTask}
           toggleTask={toggleTask}
+          markDone={markDone}
+          deleteTask={deleteTask}
         />
       )}
 
