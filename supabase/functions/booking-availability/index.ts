@@ -68,7 +68,20 @@ Deno.serve(async (req) => {
     const earliest = new Date(now.getTime() + LEAD_HOURS * 3600 * 1000);
     const horizon = new Date(now.getTime() + DAYS_AHEAD * 24 * 3600 * 1000);
 
-    // Free/busy lookup
+    // List all calendars the account can see, so we honor conflicts across
+    // every subscribed calendar — not just "primary".
+    const calListRes = await fetch(
+      "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=freeBusyReader&showHidden=true",
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (!calListRes.ok) throw new Error(`calendarList error: ${await calListRes.text()}`);
+    const calListJson = await calListRes.json();
+    const calendarIds: string[] = (calListJson.items ?? [])
+      .filter((c: Record<string, unknown>) => c.selected !== false)
+      .map((c: Record<string, string>) => c.id);
+    if (calendarIds.length === 0) calendarIds.push("primary");
+
+    // Free/busy lookup across all selected calendars
     const fbRes = await fetch("https://www.googleapis.com/calendar/v3/freeBusy", {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
@@ -76,12 +89,16 @@ Deno.serve(async (req) => {
         timeMin: now.toISOString(),
         timeMax: horizon.toISOString(),
         timeZone: TZ,
-        items: [{ id: "primary" }],
+        items: calendarIds.map((id) => ({ id })),
       }),
     });
     if (!fbRes.ok) throw new Error(`freeBusy error: ${await fbRes.text()}`);
     const fbJson = await fbRes.json();
-    const busy: { start: string; end: string }[] = fbJson.calendars?.primary?.busy ?? [];
+    const busy: { start: string; end: string }[] = [];
+    for (const id of calendarIds) {
+      const cal = fbJson.calendars?.[id];
+      if (cal?.busy?.length) busy.push(...cal.busy);
+    }
     const busyRanges = busy.map(b => ({ start: new Date(b.start).getTime(), end: new Date(b.end).getTime() }));
 
     // Walk each day in TZ, generate candidate slots, filter against busy + buffer.
