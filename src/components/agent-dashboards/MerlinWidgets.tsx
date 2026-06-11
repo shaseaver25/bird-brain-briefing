@@ -15,7 +15,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { ExternalLink, Layers } from "lucide-react";
+import { Layers } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 // ── Types ────────────────────────────────────────────────────────────────────
