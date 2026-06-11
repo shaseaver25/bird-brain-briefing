@@ -4,6 +4,22 @@ import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.32.1';
 
 const AGENT_ID = 'mockingjay';
 
+function extractJson(text: string): any {
+  if (!text) return null;
+  // Strip ```json ... ``` or ``` ... ``` fences
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1] : text;
+  // First try direct parse
+  try { return JSON.parse(candidate.trim()); } catch (_) {}
+  // Fall back: find first { ... last }
+  const start = candidate.indexOf('{');
+  const end = candidate.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    try { return JSON.parse(candidate.slice(start, end + 1)); } catch (_) {}
+  }
+  return null;
+}
+
 serve(async (req) => {
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL'),
@@ -65,12 +81,10 @@ serve(async (req) => {
         });
 
         let postQueue = { posts: [] };
-        try {
-          const rawText = postDraftResponse.content[0].type === 'text' ? postDraftResponse.content[0].text : '{"posts":[]}';
-          postQueue = JSON.parse(rawText);
-        } catch (_e) {
-          postQueue = { posts: [] };
-        }
+        const rawPostText = postDraftResponse.content[0].type === 'text' ? postDraftResponse.content[0].text : '';
+        const parsedPosts = extractJson(rawPostText);
+        if (parsedPosts) postQueue = parsedPosts;
+        else console.error('MockingJay: failed to parse posts JSON. Raw:', rawPostText.slice(0, 500));
 
         const scorecardResponse = await anthropic.messages.create({
           model: 'claude-sonnet-4-6',
@@ -85,12 +99,10 @@ serve(async (req) => {
         });
 
         let scorecard = {};
-        try {
-          const rawScore = scorecardResponse.content[0].type === 'text' ? scorecardResponse.content[0].text : '{}';
-          scorecard = JSON.parse(rawScore);
-        } catch (_e) {
-          scorecard = {};
-        }
+        const rawScoreText = scorecardResponse.content[0].type === 'text' ? scorecardResponse.content[0].text : '';
+        const parsedScore = extractJson(rawScoreText);
+        if (parsedScore) scorecard = parsedScore;
+        else console.error('MockingJay: failed to parse scorecard JSON. Raw:', rawScoreText.slice(0, 500));
 
         const calendarResponse = await anthropic.messages.create({
           model: 'claude-sonnet-4-6',
@@ -105,12 +117,10 @@ serve(async (req) => {
         });
 
         let calendar = { calendar: [] };
-        try {
-          const rawCal = calendarResponse.content[0].type === 'text' ? calendarResponse.content[0].text : '{"calendar":[]}';
-          calendar = JSON.parse(rawCal);
-        } catch (_e) {
-          calendar = { calendar: [] };
-        }
+        const rawCalText = calendarResponse.content[0].type === 'text' ? calendarResponse.content[0].text : '';
+        const parsedCal = extractJson(rawCalText);
+        if (parsedCal) calendar = parsedCal;
+        else console.error('MockingJay: failed to parse calendar JSON. Raw:', rawCalText.slice(0, 500));
 
         const now = new Date().toISOString();
         const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString();
@@ -143,10 +153,11 @@ serve(async (req) => {
         });
 
         let brief = { brief: [], one_liner: '' };
-        try {
-          const rawBrief = meetingBriefResponse.content[0].type === 'text' ? meetingBriefResponse.content[0].text : '{"brief":[],"one_liner":""}';
-          brief = JSON.parse(rawBrief);
-        } catch (_e) {
+        const rawBriefText = meetingBriefResponse.content[0].type === 'text' ? meetingBriefResponse.content[0].text : '';
+        const parsedBrief = extractJson(rawBriefText);
+        if (parsedBrief) brief = parsedBrief;
+        else {
+          console.error('MockingJay: failed to parse brief JSON. Raw:', rawBriefText.slice(0, 500));
           brief = { brief: ['MockingJay ran. Check widgets for details.'], one_liner: 'Content drafted. Awaiting your review.' };
         }
 
