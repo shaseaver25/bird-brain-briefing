@@ -891,6 +891,27 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       widget_data: {
         Row: {
           agent_id: string
@@ -924,9 +945,17 @@ export type Database = {
     }
     Functions: {
       exec_agent_migration: { Args: { _build_id: string }; Returns: Json }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       purge_old_conversations: { Args: never; Returns: undefined }
     }
     Enums: {
+      app_role: "admin" | "user"
       memory_type: "fact" | "preference" | "learned" | "instruction"
       message_role: "user" | "assistant" | "system"
       task_priority: "low" | "medium" | "high"
@@ -1058,6 +1087,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["admin", "user"],
       memory_type: ["fact", "preference", "learned", "instruction"],
       message_role: ["user", "assistant", "system"],
       task_priority: ["low", "medium", "high"],
