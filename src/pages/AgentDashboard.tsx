@@ -10,6 +10,7 @@ import ospreyAvatar from "@/assets/osprey-avatar.png";
 import saleshawkAvatar from "@/assets/saleshawk-avatar.png";
 import wrenAvatar from "@/assets/wren-avatar.png";
 import owlAvatar from "@/assets/owl-avatar.png";
+import mockingjayAvatar from "@/assets/mockingjay-avatar.png";
 
 const AVATAR_MAP: Record<string, string> = {
   merlin: merlinAvatar,
@@ -17,6 +18,7 @@ const AVATAR_MAP: Record<string, string> = {
   saleshawk: saleshawkAvatar,
   wren: wrenAvatar,
   owl: owlAvatar,
+  mockingjay: mockingjayAvatar,
 };
 
 function getAvatar(agent: { id: string; name: string }): string | undefined {
