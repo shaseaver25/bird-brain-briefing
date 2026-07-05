@@ -1,9 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders, postMessage } from "../_shared/agent-bus.ts";
 
 // Member-company runs sourced from Apollo
 const DAILY_RUNS = [
@@ -282,6 +278,18 @@ async function runProspecting(): Promise<void> {
     },
     { onConflict: "agent_id,widget_key" }
   );
+
+  const topLead = [...inserted].sort((a, b) => b.score - a.score)[0];
+  await postMessage(staffMeetingSupabase, {
+    from: "saleshawk",
+    subject: inserted.length === 0
+      ? "Prospecting run: no new leads today"
+      : `${inserted.length} new lead${inserted.length !== 1 ? "s" : ""}${topLead ? `; top: ${topLead.name} at ${topLead.company} (score ${topLead.score})` : ""}`,
+    payload: {
+      count: inserted.length,
+      top_lead: topLead ? { name: topLead.name, company: topLead.company, score: topLead.score, business: topLead.business } : null,
+    },
+  });
 
   console.log(`saleshawk-daily complete: ${inserted.length}/${allFinds.length} inserted`);
 }

@@ -1,9 +1,9 @@
 const BASE_URL = "https://api.elevenlabs.io/v1/text-to-speech";
 
 export async function textToSpeech(text: string, voiceId: string, apiKey?: string): Promise<HTMLAudioElement | null> {
-  const key = apiKey || import.meta.env.VITE_ELEVENLABS_API_KEY;
+  const key = apiKey;
   if (!key) {
-    console.warn("ElevenLabs API key not set");
+    console.warn("ElevenLabs API key not set — add one in Settings to enable voice playback");
     return null;
   }
 

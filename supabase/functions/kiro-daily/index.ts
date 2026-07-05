@@ -1,10 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.32.1";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders, postMessage } from "../_shared/agent-bus.ts";
 
 // Topics Kiro monitors — stored here for now, move to kiro_topics table later
 const TOPICS = [
@@ -171,6 +167,15 @@ async function runKiroIntel(): Promise<void> {
   const { error } = await supabase.from("kiro_intel").insert(rows);
   if (error) console.error("Insert error:", error.message);
   else console.log(`Saved ${rows.length} new articles to kiro_intel`);
+
+  if (!error) {
+    const high = rows.filter((r) => r.relevance === "high");
+    await postMessage(supabase, {
+      from: "kiro",
+      subject: `${rows.length} new intel article${rows.length !== 1 ? "s" : ""} (${high.length} high relevance)`,
+      payload: { count: rows.length, high_relevance_titles: high.slice(0, 5).map((r) => r.title) },
+    });
+  }
 }
 
 Deno.serve(async (req) => {

@@ -1,10 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.32.1";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders, postMessage } from "../_shared/agent-bus.ts";
 
 async function generateAgent(buildId: string, name: string, description: string): Promise<void> {
   const supabase = createClient(
@@ -35,7 +31,7 @@ Generate all four artifacts. Return ONLY valid JSON — no markdown fences, no e
 
 {
   "system_prompt": "Complete system prompt for ${name} (400-700 words). Define: who this agent is, their personality, their specific capabilities, what data they access, how they speak in staff meetings (brief, focused, with their unique voice), and what their dashboard shows Shannon.",
-  "edge_function_code": "Complete Deno/TypeScript edge function for supabase/functions/${slug}/index.ts. Must: import createClient from supabase-js@2 and Anthropic from sdk@0.32.1, fetch or generate relevant data, use Claude claude-sonnet-4-6 to process/summarize it, store results in widget_data (upsert with onConflict agent_id,widget_key), use EdgeRuntime.waitUntil for fire-and-forget, return 202. Agent ID must be '${slug}'.",
+  "edge_function_code": "Complete Deno/TypeScript edge function for supabase/functions/${slug}/index.ts. Must: import createClient from supabase-js@2 and Anthropic from sdk@0.32.1, import { corsHeaders, postMessage, readInbox, formatInboxForPrompt } from '../_shared/agent-bus.ts', fetch or generate relevant data, read peer context with readInbox(supabase, '${slug}') and include formatInboxForPrompt(inbox) in the Claude prompt, use Claude claude-sonnet-4-6 to process/summarize it, store results in widget_data (upsert with onConflict agent_id,widget_key), post a one-line run summary to the team message bus with postMessage(supabase, { from: '${slug}', subject: '...' }), use EdgeRuntime.waitUntil for fire-and-forget, return 202. Agent ID must be '${slug}'.",
   "widget_code": "Complete React/TypeScript component for src/components/agent-dashboards/${pascal}Widgets.tsx. Must: import supabase from @/integrations/supabase/client, load live data from Supabase in a useEffect hook, use Card/CardContent/CardHeader/CardTitle/CardDescription from @/components/ui/card, Badge from @/components/ui/badge. Export default function ${pascal}Widgets(). Show at least 2 widgets with real data. Include a Run Now button that invokes the edge function.",
   "sql_migration": "SQL to CREATE any new tables this agent needs (with IF NOT EXISTS), add RLS policies (authenticated read, service role full), and add updated_at triggers using update_updated_at_column(). If no new tables are needed beyond widget_data, return an empty string.",
   "notes": "3-4 sentences: what this agent does in meetings, what the Run Now button triggers, and any one-time setup steps needed."
@@ -109,7 +105,15 @@ Generate all four artifacts. Return ONLY valid JSON — no markdown fences, no e
     .eq("id", buildId);
 
   if (error) console.error("Failed to save build:", error.message);
-  else console.log(`Agent "${name}" built successfully — build ID: ${buildId}`);
+  else {
+    console.log(`Agent "${name}" built successfully — build ID: ${buildId}`);
+    await postMessage(supabase, {
+      from: "osprey",
+      kind: "handoff",
+      subject: `Built new agent "${name}" — ready for review and deploy`,
+      payload: { build_id: buildId, slug, notes: artifacts.notes },
+    });
+  }
 }
 
 Deno.serve(async (req) => {

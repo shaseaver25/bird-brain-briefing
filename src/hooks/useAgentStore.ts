@@ -69,12 +69,12 @@ export const DEFAULT_AGENTS: AgentConfig[] = [
   },
   {
     id: "kiro",
-    name: "Warbler",
-    emoji: "☁️",
-    role: "Cloud Orchestrator",
+    name: "Kiro",
+    emoji: "🐤",
+    role: "Intelligence Analyst",
     voiceId: "ErXwobaYiN019PkySvjV",
     agentId: "kiro",
-    apiUrl: "https://x3dabj2fiompspg7x7dnhid3se0spttn.lambda-url.us-east-1.on.aws/",
+    apiUrl: "",
     accentColor: "210 80% 55%",
     speakOrder: 5,
   },
@@ -105,10 +105,15 @@ export const DEFAULT_AGENTS: AgentConfig[] = [
 function mergeWithDefaults(agents: AgentConfig[]): AgentConfig[] {
   const existingIds = new Set(agents.map((a) => a.id));
   const missing = DEFAULT_AGENTS.filter((d) => !existingIds.has(d.id));
-  return [...agents, ...missing].map((a, i) => ({
-    ...a,
-    speakOrder: a.speakOrder ?? i + 1,
-  }));
+  return [...agents, ...missing].map((a, i) => {
+    // One-time repair: saved configs may still carry the old "Warbler /
+    // Cloud Orchestrator" identity for the kiro agent (with a stale Lambda URL).
+    if (a.id === "kiro" && a.name === "Warbler") {
+      const fresh = DEFAULT_AGENTS.find((d) => d.id === "kiro")!;
+      a = { ...a, name: fresh.name, emoji: fresh.emoji, role: fresh.role, apiUrl: fresh.apiUrl };
+    }
+    return { ...a, speakOrder: a.speakOrder ?? i + 1 };
+  });
 }
 
 function loadLocalState(): StoreState {

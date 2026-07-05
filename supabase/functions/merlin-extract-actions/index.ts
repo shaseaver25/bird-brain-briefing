@@ -1,9 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders, postMessage, serviceClient } from "../_shared/agent-bus.ts";
 
 const GRANOLA_GATEWAY = "https://connector-gateway.lovable.dev/granola";
 const AI_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
@@ -99,6 +95,14 @@ Deno.serve(async (req) => {
     }
 
     await userClient.from("merlin_scan_state").upsert({ user_id: user.id, last_scan_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+
+    if (added > 0) {
+      await postMessage(serviceClient(), {
+        from: "merlin",
+        subject: `Extracted ${added} action item${added !== 1 ? "s" : ""} from ${scanned} meeting${scanned !== 1 ? "s" : ""}`,
+        payload: { scanned, added },
+      });
+    }
 
     return new Response(JSON.stringify({ ok: true, scanned, added }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

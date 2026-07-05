@@ -1,9 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders, postMessage } from "../_shared/agent-bus.ts";
 
 const AGENT_ID = "owl";
 const AI_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
@@ -113,8 +109,11 @@ Aim for 8-15 items spanning federal + several states. Be accurate; if uncertain 
         }
       }
 
-      // Replace items in DB
-      await supabase.from("legislation_items").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+      // Replace items only for the topics scanned this run, and only when the
+      // scan actually produced results — a failed AI call must not wipe the table.
+      if (allItems.length > 0) {
+        await supabase.from("legislation_items").delete().in("topic", topics);
+      }
       if (allItems.length > 0) {
         const rows = allItems.map((it) => ({
           topic: it.topic,
@@ -167,6 +166,12 @@ ${JSON.stringify(allItems.slice(0, 50), null, 2)}`;
         expires_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
         updated_at: new Date().toISOString(),
       }, { onConflict: "agent_id,widget_key" });
+
+      await postMessage(supabase, {
+        from: AGENT_ID,
+        subject: `Legislation scan: ${allItems.length} bills across ${topics.length} topic(s)`,
+        payload: { topics, item_count: allItems.length, summary: overallSummary.slice(0, 400) },
+      });
 
       console.log(`Owl scan complete: ${allItems.length} bills across ${topics.length} topics`);
     } catch (err) {

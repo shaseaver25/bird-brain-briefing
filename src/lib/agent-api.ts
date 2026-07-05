@@ -1,9 +1,10 @@
 /**
  * agent-api.ts — Unified API client for agent communication
  *
- * Supports two backends via feature flag:
+ * Supports three backends:
+ *   - "edge"   → agent-chat edge function (default — no user setup, keys stay server-side)
+ *   - "mcp"    → Claude API directly from browser (opt-in, needs an Anthropic key)
  *   - "legacy" → OpenClaw/Lambda (original apiUrl per agent)
- *   - "mcp"    → Claude API directly from browser (no edge function needed)
  */
 
 import { supabase } from "@/integrations/supabase/client";
@@ -12,7 +13,7 @@ const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 
 // ── Types ──────────────────────────────────────────────────────
 
-export type BackendMode = "legacy" | "mcp";
+export type BackendMode = "edge" | "legacy" | "mcp";
 
 export interface AgentRequest {
   agentId: string;
@@ -50,15 +51,17 @@ export async function getBackendMode(): Promise<BackendMode> {
   if (_cachedMode) return _cachedMode;
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return "legacy";
+    if (!user) return "edge";
     const { data } = await (supabase
       .from("app_config")
       .select("use_mcp_backend")
       .eq("user_id", user.id)
       .maybeSingle() as unknown as Promise<{ data: { use_mcp_backend?: boolean } | null }>);
-    _cachedMode = data?.use_mcp_backend ? "mcp" : "legacy";
+    // Users who explicitly enabled the direct-browser backend keep it;
+    // everyone else gets the built-in edge function (works with no setup).
+    _cachedMode = data?.use_mcp_backend ? "mcp" : "edge";
   } catch {
-    _cachedMode = "legacy";
+    _cachedMode = "edge";
   }
   return _cachedMode;
 }
@@ -229,6 +232,18 @@ async function callMcp(request: AgentRequest, anthropicKey: string): Promise<Age
   return { response, agentId: request.agentId, sessionId, tokens };
 }
 
+// ── Edge backend (agent-chat function, server-side keys) ──────
+
+async function callEdge(request: AgentRequest): Promise<AgentResponse> {
+  const sessionId = request.sessionId || getSessionId();
+  const { data, error } = await supabase.functions.invoke("agent-chat", {
+    body: { ...request, sessionId },
+  });
+  if (error) throw new Error(`agent-chat error: ${error.message}`);
+  if (data?.error) throw new Error(`agent-chat error: ${data.error}`);
+  return data as AgentResponse;
+}
+
 // ── Unified send function ──────────────────────────────────────
 
 export async function sendAgentMessage(
@@ -238,11 +253,21 @@ export async function sendAgentMessage(
 ): Promise<AgentResponse> {
   const mode = await getBackendMode();
 
-  if (mode === "mcp") {
-    if (!anthropicKey) throw new Error("Anthropic API key required for MCP mode. Add it in Settings.");
+  if (mode === "mcp" && anthropicKey) {
     return callMcp(request, anthropicKey);
   }
 
-  if (!legacyApiUrl) throw new Error(`No API URL configured for agent ${request.agentId}`);
-  return callLegacy(legacyApiUrl, request.agentId, request.message);
+  if (mode === "legacy" && legacyApiUrl) {
+    return callLegacy(legacyApiUrl, request.agentId, request.message);
+  }
+
+  // Default path: built-in edge function. Fall back to whatever the user has
+  // configured if the edge function is unavailable.
+  try {
+    return await callEdge(request);
+  } catch (edgeErr) {
+    if (anthropicKey) return callMcp(request, anthropicKey);
+    if (legacyApiUrl) return callLegacy(legacyApiUrl, request.agentId, request.message);
+    throw edgeErr;
+  }
 }

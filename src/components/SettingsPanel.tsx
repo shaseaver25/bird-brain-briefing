@@ -190,7 +190,7 @@ export default function SettingsPanel({
           {/* Anthropic API Key */}
           <div>
             <label className="text-xs uppercase tracking-wider text-muted-foreground font-mono block mb-2">
-              Anthropic API Key
+              Anthropic API Key (optional fallback)
             </label>
             <input
               type="password"
@@ -199,6 +199,10 @@ export default function SettingsPanel({
               value={anthropicKey}
               onChange={(e) => onSetAnthropicKey(e.target.value)}
             />
+            <p className="text-xs text-muted-foreground mt-1.5">
+              Chat uses the built-in server backend by default — no key needed. Add a key only to
+              enable the direct Claude API mode below.
+            </p>
           </div>
 
           {/* MCP Backend Toggle */}
@@ -226,11 +230,16 @@ export default function SettingsPanel({
                 />
               </span>
               <span className="font-mono">
-                {useMcpBackend ? "Claude API (MCP)" : "Legacy (OpenClaw)"}
+                {useMcpBackend ? "Claude API (MCP)" : "Built-in (recommended)"}
               </span>
             </button>
             {useMcpBackend && !anthropicKey && (
               <p className="text-xs text-amber-500 mt-1.5">Add your Anthropic key above to use MCP mode.</p>
+            )}
+            {!useMcpBackend && (
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Built-in mode calls the agent-chat edge function — works out of the box.
+              </p>
             )}
           </div>
 

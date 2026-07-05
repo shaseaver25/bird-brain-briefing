@@ -1,4 +1,4 @@
-import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { encode as base64Encode } from 'https://deno.land/std@0.224.0/encoding/base64.ts';
 
