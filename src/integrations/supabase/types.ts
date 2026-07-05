@@ -112,6 +112,45 @@ export type Database = {
           },
         ]
       }
+      agent_messages: {
+        Row: {
+          created_at: string
+          expires_at: string
+          from_agent: string
+          id: string
+          kind: string
+          payload: Json
+          read_by: string[]
+          status: string
+          subject: string
+          to_agent: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          from_agent: string
+          id?: string
+          kind?: string
+          payload?: Json
+          read_by?: string[]
+          status?: string
+          subject: string
+          to_agent?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          from_agent?: string
+          id?: string
+          kind?: string
+          payload?: Json
+          read_by?: string[]
+          status?: string
+          subject?: string
+          to_agent?: string
+        }
+        Relationships: []
+      }
       agent_notes: {
         Row: {
           agent_id: string
@@ -279,6 +318,7 @@ export type Database = {
           id: string
           name: string
           role: string
+          slug: string | null
           status: string
           system_prompt_preview: string | null
           updated_at: string
@@ -292,6 +332,7 @@ export type Database = {
           id?: string
           name: string
           role: string
+          slug?: string | null
           status?: string
           system_prompt_preview?: string | null
           updated_at?: string
@@ -305,6 +346,7 @@ export type Database = {
           id?: string
           name?: string
           role?: string
+          slug?: string | null
           status?: string
           system_prompt_preview?: string | null
           updated_at?: string
