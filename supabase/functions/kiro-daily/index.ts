@@ -1,10 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.32.1";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders, postMessage } from "../_shared/agent-bus.ts";
 
 // Topics Kiro monitors — stored here for now, move to kiro_topics table later
 const TOPICS = [
@@ -58,6 +54,7 @@ async function findArticlesForTopic(
     system: `You are Kiro, an intelligence analyst. Find recent, real articles and reports published in the last 48 hours.
 Prioritize: news sites, industry blogs, research reports, LinkedIn articles.
 Avoid: paywalled content, forums, job boards, opinion pieces older than 2 days.
+GROUNDING: include ONLY articles actually returned by your web search — never fabricate an article, headline, publication, or URL. Every url must be one you saw in search results. If nothing qualifies, return [].
 Return ONLY a valid JSON array, no other text.`,
     messages: [{
       role: "user",
@@ -171,6 +168,15 @@ async function runKiroIntel(): Promise<void> {
   const { error } = await supabase.from("kiro_intel").insert(rows);
   if (error) console.error("Insert error:", error.message);
   else console.log(`Saved ${rows.length} new articles to kiro_intel`);
+
+  if (!error) {
+    const high = rows.filter((r) => r.relevance === "high");
+    await postMessage(supabase, {
+      from: "kiro",
+      subject: `${rows.length} new intel article${rows.length !== 1 ? "s" : ""} (${high.length} high relevance)`,
+      payload: { count: rows.length, high_relevance_titles: high.slice(0, 5).map((r) => r.title) },
+    });
+  }
 }
 
 Deno.serve(async (req) => {

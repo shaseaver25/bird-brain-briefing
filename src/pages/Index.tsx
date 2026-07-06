@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Play, Radio, Send, Mic, Volume2, VolumeX, RotateCcw, Square, LogOut } from "lucide-react";
 import AgentPanel, { AgentPanelHandle } from "@/components/AgentPanel";
 import SettingsPanel from "@/components/SettingsPanel";
+import CommsFeed from "@/components/CommsFeed";
 import { useAgentStore } from "@/hooks/useAgentStore";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { resetSession, clearBackendModeCache } from "@/lib/agent-api";
@@ -406,6 +407,9 @@ export default function Index({ userId }: IndexProps) {
               </p>
             </div>
           )}
+        </div>
+        <div className="max-w-[1800px] mx-auto">
+          <CommsFeed />
         </div>
       </main>
 

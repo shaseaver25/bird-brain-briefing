@@ -81,6 +81,7 @@ Write a cold email that:
 4. Ends with a low-pressure CTA: ${ctx.cta}
 5. Keeps the whole email under 150 words
 6. Sounds like a real person wrote it, not a marketing department
+7. Uses ONLY the lead details provided above — never invent facts about this person, their company, mutual connections, or past interactions. If the research notes are empty, open with an observation about their role or industry instead
 
 Format your response as JSON only:
 {

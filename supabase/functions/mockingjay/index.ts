@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.32.1';
+import { corsHeaders, formatInboxForPrompt, postMessage, readInbox } from '../_shared/agent-bus.ts';
 
 const AGENT_ID = 'mockingjay';
 
@@ -21,7 +22,7 @@ function extractJson(text: string): any {
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok');
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL'),
@@ -64,17 +65,23 @@ serve(async (req) => {
           .eq('agent_id', 'wren')
           .limit(5);
 
+        // Merlin and Kiro don't write widget_data — read their real tables.
         const { data: merlinData } = await supabase
-          .from('widget_data')
-          .select('widget_key, data')
-          .eq('agent_id', 'merlin')
-          .limit(5);
+          .from('merlin_action_items')
+          .select('title, due_date, status, context')
+          .neq('status', 'done')
+          .order('created_at', { ascending: false })
+          .limit(10);
 
         const { data: kiroData } = await supabase
-          .from('widget_data')
-          .select('widget_key, data')
-          .eq('agent_id', 'kiro')
-          .limit(3);
+          .from('kiro_intel')
+          .select('title, topic_label, summary, source')
+          .eq('relevance', 'high')
+          .gt('expires_at', new Date().toISOString())
+          .order('found_at', { ascending: false })
+          .limit(5);
+
+        const inbox = await readInbox(supabase, AGENT_ID);
 
         const { data: existingPosts } = await supabase
           .from('widget_data')
@@ -85,15 +92,16 @@ serve(async (req) => {
 
         const contextSummary = JSON.stringify({
           wren: wrenData ?? [],
-          merlin: merlinData ?? [],
-          kiro: kiroData ?? [],
+          merlin_action_items: merlinData ?? [],
+          kiro_intel: kiroData ?? [],
+          team_messages: formatInboxForPrompt(inbox),
           customTopic,
         });
 
         const postDraftResponse = await anthropic.messages.create({
           model: 'claude-sonnet-4-6',
           max_tokens: 2000,
-          system: 'You are MockingJay, a social media content agent. You create platform-native post drafts for LinkedIn, Instagram, and Facebook based on team activity data. Return ONLY valid JSON matching this schema exactly: { "posts": [ { "id": "string", "platform": "LinkedIn|Instagram|Facebook", "content": "string", "hashtags": ["string"], "status": "Draft|Ready|Needs Review", "hook": "string", "source": "string", "created_at": "ISO timestamp" } ] }. Create 1-2 posts per platform (3-6 total). Make each post feel native to its platform. LinkedIn = professional insight. Instagram = visual concept plus punchy caption. Facebook = conversational and community-oriented. If a customTopic is provided, prioritize it.',
+          system: 'You are MockingJay, a social media content agent. You create platform-native post drafts for LinkedIn, Instagram, and Facebook based on team activity data. Return ONLY valid JSON matching this schema exactly: { "posts": [ { "id": "string", "platform": "LinkedIn|Instagram|Facebook", "content": "string", "hashtags": ["string"], "status": "Draft|Ready|Needs Review", "hook": "string", "source": "string", "created_at": "ISO timestamp" } ] }. Create 1-2 posts per platform (3-6 total). Make each post feel native to its platform. LinkedIn = professional insight. Instagram = visual concept plus punchy caption. Facebook = conversational and community-oriented. If a customTopic is provided, prioritize it. GROUNDING: base every post only on the provided team context — never invent statistics, customer names, results, or testimonials. Set each post\'s "source" field to the specific context item it came from.',
           messages: [
             {
               role: 'user',
@@ -115,7 +123,7 @@ serve(async (req) => {
           messages: [
             {
               role: 'user',
-              content: 'Post queue context: ' + JSON.stringify(postQueue) + '. Existing posts: ' + JSON.stringify(existingPosts?.data ?? {}) + '. Generate a platform health scorecard. Assume realistic posting gaps for a small team.',
+              content: 'Post queue context: ' + JSON.stringify(postQueue) + '. Existing posts: ' + JSON.stringify(existingPosts?.data ?? {}) + '. Generate a platform health scorecard based ONLY on this data. There is no live platform analytics feed, so daysSincePost and scores are estimates — keep recommendations phrased as estimates, and never present invented engagement numbers as fact.',
             },
           ],
         });
@@ -188,6 +196,12 @@ serve(async (req) => {
           { onConflict: 'agent_id,widget_key' }
         );
 
+        await postMessage(supabase, {
+          from: AGENT_ID,
+          subject: brief.one_liner || `Drafted ${postQueue.posts?.length ?? 0} social posts`,
+          payload: { drafts: postQueue.posts?.length ?? 0, brief: brief.brief },
+        });
+
       } catch (err) {
         console.error('MockingJay edge function error:', err);
       }
@@ -196,6 +210,6 @@ serve(async (req) => {
 
   return new Response(JSON.stringify({ status: 'accepted', agent: AGENT_ID }), {
     status: 202,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 });

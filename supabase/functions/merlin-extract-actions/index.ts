@@ -1,9 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders, postMessage, serviceClient } from "../_shared/agent-bus.ts";
 
 const GRANOLA_GATEWAY = "https://connector-gateway.lovable.dev/granola";
 const AI_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
@@ -13,6 +9,7 @@ interface Action { title: string; due_date?: string | null; context?: string | n
 async function extractActions(LOVABLE_API_KEY: string, title: string, summary: string, userEmail: string | undefined): Promise<Action[]> {
   const sys = `You extract action items from meeting notes that are assigned to or owned by Shannon (email: ${userEmail ?? "shannon@tailoredu.org"}).
 Only return tasks Shannon needs to do — NOT things assigned to other attendees.
+GROUNDING: only extract action items explicitly stated in the notes — never infer, embellish, or invent tasks, owners, or due dates that are not written there. Use a due_date only if the notes state one.
 Reply with strict JSON: {"actions":[{"title":"short verb-led task","due_date":"YYYY-MM-DD or null","context":"one sentence why"}]}.
 If there are no Shannon-owned next steps, return {"actions":[]}.`;
   const user = `Meeting: ${title}\n\nNotes:\n${(summary ?? "").slice(0, 6000)}`;
@@ -99,6 +96,14 @@ Deno.serve(async (req) => {
     }
 
     await userClient.from("merlin_scan_state").upsert({ user_id: user.id, last_scan_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+
+    if (added > 0) {
+      await postMessage(serviceClient(), {
+        from: "merlin",
+        subject: `Extracted ${added} action item${added !== 1 ? "s" : ""} from ${scanned} meeting${scanned !== 1 ? "s" : ""}`,
+        payload: { scanned, added },
+      });
+    }
 
     return new Response(JSON.stringify({ ok: true, scanned, added }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

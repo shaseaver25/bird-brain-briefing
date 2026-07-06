@@ -1,9 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders, formatInboxForPrompt, postMessage, readInbox } from "../_shared/agent-bus.ts";
 
 async function getGoogleAccessToken(clientId: string, clientSecret: string, refreshToken: string): Promise<string> {
   const res = await fetch("https://oauth2.googleapis.com/token", {
@@ -92,7 +88,7 @@ async function compileBriefing(): Promise<void> {
     Deno.env.get("GOOGLE_REFRESH_TOKEN_WREN")!
   );
 
-  const [calendarText, emailText, saleshawkData, kiroData] = await Promise.all([
+  const [calendarText, emailText, saleshawkData, kiroData, inbox] = await Promise.all([
     fetchTodayCalendar(accessToken),
     fetchFlaggedEmails(accessToken),
     // SalesHawk's latest finds
@@ -112,6 +108,8 @@ async function compileBriefing(): Promise<void> {
       .order("found_at", { ascending: false })
       .limit(3)
       .then(({ data }) => data ?? []),
+    // Unread reports from the other agents on the message bus
+    readInbox(supabase, "wren"),
   ]);
 
   // Format SalesHawk summary
@@ -150,7 +148,10 @@ ${saleshawkText}
 KIRO INTELLIGENCE HIGHLIGHTS:
 ${kiroText}
 
+${formatInboxForPrompt(inbox) || "TEAM MESSAGES: none since the last briefing."}
+
 INSTRUCTIONS:
+- Use ONLY the data above. If a section is empty or unavailable, say so naturally ("no flagged emails today") — do NOT invent events, emails, leads, intel, or attributions
 - Write as if you're speaking directly to Shannon at the start of a meeting
 - Conversational, confident, warm — you know Shannon well
 - Cover all four areas but naturally, not like a list
@@ -190,6 +191,13 @@ INSTRUCTIONS:
     expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     updated_at: new Date().toISOString(),
   }, { onConflict: "agent_id,widget_key" });
+
+  await postMessage(supabase, {
+    from: "wren",
+    subject: "Morning briefing compiled and ready",
+    payload: { briefing_preview: briefingText.slice(0, 200) },
+    ttlHours: 24,
+  });
 
   console.log("Morning briefing compiled successfully");
 }

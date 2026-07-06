@@ -12,10 +12,12 @@ import KiroDashboardPage from "./pages/KiroDashboardPage";
 import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
 import BookingPage from "./pages/BookingPage";
+import MeetPage from "./pages/MeetPage";
 import VoiceAgentPage from "./pages/VoiceAgentPage";
 import PanelPage from "./pages/PanelPage";
 import MyAgentPage from "./pages/MyAgentPage";
 import GlobalVoiceStop from "./components/GlobalVoiceStop";
+import AppNav from "./components/AppNav";
 
 const queryClient = new QueryClient();
 
@@ -54,11 +56,13 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <AppNav />
         <Routes>
           <Route path="/" element={<AuthGate>{(userId: string) => <Index userId={userId} />}</AuthGate>} />
           <Route path="/meeting" element={<AuthGate><StaffMeetingPage /></AuthGate>} />
           <Route path="/dashboard/:agentId" element={<AuthGate><KiroDashboardPage /></AuthGate>} />
           <Route path="/book" element={<BookingPage />} />
+          <Route path="/meet" element={<MeetPage />} />
           <Route path="/voice" element={<AuthGate><VoiceAgentPage /></AuthGate>} />
           <Route path="/panel" element={<AuthGate><PanelPage /></AuthGate>} />
           <Route path="/my-agent" element={<AuthGate><MyAgentPage /></AuthGate>} />
