@@ -47,6 +47,8 @@ Deno.serve(async (req) => {
     const { data: userData } = await authClient.auth.getUser();
     const user = userData?.user;
     if (!user) return json({ error: "unauthenticated" }, 401);
+    const { data: isAdmin } = await authClient.rpc("has_role", { _user_id: user.id, _role: "admin" });
+    if (!isAdmin) return json({ error: "forbidden" }, 403);
 
     const { agentId, message, sessionId, meetingMode, meetingTranscript } = await req.json();
     if (!agentId || !message) return json({ error: "agentId and message required" }, 400);
