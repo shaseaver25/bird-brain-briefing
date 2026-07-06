@@ -381,6 +381,24 @@ export type Database = {
         }
         Relationships: []
       }
+      booking_rate_limits: {
+        Row: {
+          created_at: string
+          id: string
+          ip: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ip: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ip?: string
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
           agent_id: string
@@ -455,6 +473,48 @@ export type Database = {
           theme?: string
           updated_at?: string
           version?: number
+        }
+        Relationships: []
+      }
+      inbound_leads: {
+        Row: {
+          business: string
+          company: string | null
+          created_at: string
+          email: string
+          id: string
+          name: string
+          notes: string | null
+          source: string
+          source_detail: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          business?: string
+          company?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          name: string
+          notes?: string | null
+          source?: string
+          source_detail?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          business?: string
+          company?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          source?: string
+          source_detail?: string | null
+          status?: string
+          updated_at?: string
         }
         Relationships: []
       }
