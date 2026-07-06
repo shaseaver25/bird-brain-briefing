@@ -622,6 +622,9 @@ export default function MerlinWidgets() {
         </Button>
       </div>
 
+      {/* Follow-ups handed to Merlin by other agents (SalesHawk/Swift) */}
+      <IncomingHandoffsWidget />
+
       {/* Action items pulled from meeting notes */}
       <MeetingActionItemsWidget />
 
@@ -643,6 +646,69 @@ export default function MerlinWidgets() {
       {/* Deadline timeline */}
       <TimelineWidget projects={projects} />
     </div>
+  );
+}
+
+// ── Incoming Handoffs Widget ──────────────────────────────────────────────────
+// Follow-ups other agents have handed to Merlin via the message bus.
+
+interface HandoffRow {
+  id: string;
+  from_agent: string;
+  subject: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+}
+
+function IncomingHandoffsWidget() {
+  const [handoffs, setHandoffs] = useState<HandoffRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const { data } = await (supabase.from("agent_messages" as never) as ReturnType<typeof supabase.from>)
+        .select("id, from_agent, subject, payload, created_at")
+        .eq("to_agent", "merlin")
+        .eq("kind", "handoff")
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (cancelled) return;
+      setHandoffs((data ?? []) as unknown as HandoffRow[]);
+      setLoading(false);
+    }
+    load();
+    const poll = setInterval(load, 45_000);
+    return () => { cancelled = true; clearInterval(poll); };
+  }, []);
+
+  if (!loading && handoffs.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <ClipboardList className="h-5 w-5 text-primary" />
+          Incoming Follow-ups
+        </CardTitle>
+        <CardDescription>Handed to Merlin by the team — new inbound leads to chase</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {handoffs.map((h) => (
+          <div key={h.id} className="flex items-start gap-3 rounded-md border border-border/60 px-3 py-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">{h.subject}</p>
+              <p className="text-xs text-muted-foreground">
+                from {h.from_agent}
+                {h.payload?.source ? ` · ${String(h.payload.source).replace("_", " ")}` : ""}
+                {" · "}{new Date(h.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              </p>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 

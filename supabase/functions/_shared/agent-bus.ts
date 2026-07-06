@@ -112,3 +112,35 @@ export function formatInboxForPrompt(messages: AgentMessage[]): string {
   });
   return `TEAM MESSAGES (latest reports from the other agents):\n${lines.join("\n")}`;
 }
+
+// A handoff is a directed request from one agent to another to act on
+// something — the thing that turns "reporting to each other" into
+// "working together". Convenience wrapper over postMessage.
+export async function handoff(
+  sb: SupabaseClient,
+  from: string,
+  to: string,
+  subject: string,
+  payload?: Record<string, unknown>,
+): Promise<void> {
+  await postMessage(sb, { from, to, kind: "handoff", subject, payload });
+}
+
+// Read only the unconsumed handoffs addressed to an agent, marking just
+// those handoffs as read (not the agent's other inbox messages).
+export async function readHandoffs(
+  sb: SupabaseClient,
+  agent: string,
+  opts?: { limit?: number; markRead?: boolean },
+): Promise<AgentMessage[]> {
+  const all = await readInbox(sb, agent, { limit: 50, markRead: false });
+  const handoffs = all.filter((m) => m.kind === "handoff").slice(-(opts?.limit ?? 10));
+  if (opts?.markRead !== false && handoffs.length > 0) {
+    for (const m of handoffs) {
+      const { data } = await sb.from("agent_messages").select("read_by").eq("id", m.id).maybeSingle();
+      const readBy: string[] = (data as { read_by?: string[] } | null)?.read_by ?? [];
+      await sb.from("agent_messages").update({ read_by: [...readBy, agent] }).eq("id", m.id);
+    }
+  }
+  return handoffs;
+}

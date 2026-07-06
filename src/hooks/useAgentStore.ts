@@ -82,7 +82,7 @@ export const DEFAULT_AGENTS: AgentConfig[] = [
     id: "owl",
     name: "Owl",
     emoji: "🦉",
-    role: "Intelligent Textbook Agent",
+    role: "Legislative Tracker",
     voiceId: "ErXwobaYiN019PkySvjV",
     agentId: "owl",
     apiUrl: "",
@@ -111,6 +111,10 @@ function mergeWithDefaults(agents: AgentConfig[]): AgentConfig[] {
     if (a.id === "kiro" && a.name === "Warbler") {
       const fresh = DEFAULT_AGENTS.find((d) => d.id === "kiro")!;
       a = { ...a, name: fresh.name, emoji: fresh.emoji, role: fresh.role, apiUrl: fresh.apiUrl };
+    }
+    // Owl's code tracks legislation, not textbooks — repair the stale role.
+    if (a.id === "owl" && a.role === "Intelligent Textbook Agent") {
+      a = { ...a, role: "Legislative Tracker" };
     }
     return { ...a, speakOrder: a.speakOrder ?? i + 1 };
   });

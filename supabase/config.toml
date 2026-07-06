@@ -13,3 +13,7 @@ verify_jwt = false
 # Public conversational scheduling agent behind /meet
 [functions.booking-agent]
 verify_jwt = false
+
+# Wren's weekly retro (admin-invoked from the dashboard; keep JWT on)
+[functions.wren-retro]
+verify_jwt = true

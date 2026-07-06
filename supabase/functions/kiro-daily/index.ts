@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.32.1";
-import { corsHeaders, postMessage } from "../_shared/agent-bus.ts";
+import { corsHeaders, handoff, postMessage } from "../_shared/agent-bus.ts";
 
 // Topics Kiro monitors — stored here for now, move to kiro_topics table later
 const TOPICS = [
@@ -176,6 +176,18 @@ async function runKiroIntel(): Promise<void> {
       subject: `${rows.length} new intel article${rows.length !== 1 ? "s" : ""} (${high.length} high relevance)`,
       payload: { count: rows.length, high_relevance_titles: high.slice(0, 5).map((r) => r.title) },
     });
+
+    // Hand each high-relevance article to MockingJay as a post seed —
+    // this is the bus's handoff pattern turning intel into content.
+    for (const a of high.slice(0, 3)) {
+      await handoff(supabase, "kiro", "mockingjay", `Post-worthy: ${a.title}`, {
+        title: a.title,
+        summary: a.summary,
+        url: a.url,
+        source: a.source,
+        topic: a.topic_label,
+      });
+    }
   }
 }
 
