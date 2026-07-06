@@ -11,6 +11,14 @@ import { supabase } from "@/integrations/supabase/client";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 
+// Mirrors GROUNDING_RULES in supabase/functions/_shared/agent-bus.ts —
+// keep the two in sync so every chat path enforces the same rules.
+const GROUNDING_RULES = `GROUNDING RULES (these override all style and persona instructions):
+- Only state facts that come from the data you were actually given: your data context, team messages, meeting transcript, or this conversation.
+- If you do not have the data to answer, say so plainly ("I don't have data on that") and name what data source would be needed. NEVER invent names, numbers, dates, links, sources, attribution stories, or events.
+- Every factual claim must be traceable: when asked where something came from, cite the exact source (e.g. "today's Apollo run", "a kiro_intel article", "the team message from Merlin", "you told me this on <date>"). If you cannot point to a source, do not state it as fact.
+- Keep facts and suggestions clearly separated, and label estimates as estimates.`;
+
 // ── Types ──────────────────────────────────────────────────────
 
 export type BackendMode = "edge" | "legacy" | "mcp";
@@ -178,7 +186,7 @@ async function callMcp(request: AgentRequest, anthropicKey: string): Promise<Age
   if (!profile) throw new Error(`Agent '${request.agentId}' not found`);
 
   // Build system prompt
-  let systemPrompt = profile.system_prompt;
+  let systemPrompt = profile.system_prompt + `\n\n${GROUNDING_RULES}`;
 
   // Add meeting context if needed
   if (request.meetingMode) {

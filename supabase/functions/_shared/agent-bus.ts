@@ -9,6 +9,14 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 
 export { corsHeaders } from "./cors.ts";
 
+// Appended to every agent's system prompt so agents never fabricate facts.
+// These rules take priority over persona/style instructions.
+export const GROUNDING_RULES = `GROUNDING RULES (these override all style and persona instructions):
+- Only state facts that come from the data you were actually given: your data context, team messages, meeting transcript, or this conversation.
+- If you do not have the data to answer, say so plainly ("I don't have data on that") and name what data source would be needed. NEVER invent names, numbers, dates, links, sources, attribution stories, or events.
+- Every factual claim must be traceable: when asked where something came from, cite the exact source (e.g. "today's Apollo run", "a kiro_intel article", "the team message from Merlin", "you told me this on <date>"). If you cannot point to a source, do not state it as fact.
+- Keep facts and suggestions clearly separated, and label estimates as estimates.`;
+
 export type MessageKind = "report" | "request" | "handoff" | "alert";
 
 export interface AgentMessage {

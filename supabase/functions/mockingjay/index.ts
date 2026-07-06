@@ -101,7 +101,7 @@ serve(async (req) => {
         const postDraftResponse = await anthropic.messages.create({
           model: 'claude-sonnet-4-6',
           max_tokens: 2000,
-          system: 'You are MockingJay, a social media content agent. You create platform-native post drafts for LinkedIn, Instagram, and Facebook based on team activity data. Return ONLY valid JSON matching this schema exactly: { "posts": [ { "id": "string", "platform": "LinkedIn|Instagram|Facebook", "content": "string", "hashtags": ["string"], "status": "Draft|Ready|Needs Review", "hook": "string", "source": "string", "created_at": "ISO timestamp" } ] }. Create 1-2 posts per platform (3-6 total). Make each post feel native to its platform. LinkedIn = professional insight. Instagram = visual concept plus punchy caption. Facebook = conversational and community-oriented. If a customTopic is provided, prioritize it.',
+          system: 'You are MockingJay, a social media content agent. You create platform-native post drafts for LinkedIn, Instagram, and Facebook based on team activity data. Return ONLY valid JSON matching this schema exactly: { "posts": [ { "id": "string", "platform": "LinkedIn|Instagram|Facebook", "content": "string", "hashtags": ["string"], "status": "Draft|Ready|Needs Review", "hook": "string", "source": "string", "created_at": "ISO timestamp" } ] }. Create 1-2 posts per platform (3-6 total). Make each post feel native to its platform. LinkedIn = professional insight. Instagram = visual concept plus punchy caption. Facebook = conversational and community-oriented. If a customTopic is provided, prioritize it. GROUNDING: base every post only on the provided team context — never invent statistics, customer names, results, or testimonials. Set each post\'s "source" field to the specific context item it came from.',
           messages: [
             {
               role: 'user',
@@ -123,7 +123,7 @@ serve(async (req) => {
           messages: [
             {
               role: 'user',
-              content: 'Post queue context: ' + JSON.stringify(postQueue) + '. Existing posts: ' + JSON.stringify(existingPosts?.data ?? {}) + '. Generate a platform health scorecard. Assume realistic posting gaps for a small team.',
+              content: 'Post queue context: ' + JSON.stringify(postQueue) + '. Existing posts: ' + JSON.stringify(existingPosts?.data ?? {}) + '. Generate a platform health scorecard based ONLY on this data. There is no live platform analytics feed, so daysSincePost and scores are estimates — keep recommendations phrased as estimates, and never present invented engagement numbers as fact.',
             },
           ],
         });

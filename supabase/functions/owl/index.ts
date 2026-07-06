@@ -132,7 +132,7 @@ Aim for 8-15 items spanning federal + several states. Be accurate; if uncertain 
       }
 
       // Generate overall summary
-      const summaryPrompt = `You are Owl, a legislative analyst. Topics tracked: ${topics.join(", ")}. Below is a JSON list of bills currently being tracked. Write a concise 3-5 sentence executive summary highlighting key trends, urgent items, and notable conflicts between state vs federal approaches. Plain prose, no markdown.
+      const summaryPrompt = `You are Owl, a legislative analyst. Topics tracked: ${topics.join(", ")}. Below is a JSON list of bills currently being tracked. Write a concise 3-5 sentence executive summary highlighting key trends, urgent items, and notable conflicts between state vs federal approaches. Base the summary ONLY on the bills listed below — do not reference bills, events, or outcomes that are not in the list. Plain prose, no markdown.
 
 ${JSON.stringify(allItems.slice(0, 50), null, 2)}`;
 

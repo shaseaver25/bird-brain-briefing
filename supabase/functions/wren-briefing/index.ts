@@ -151,6 +151,7 @@ ${kiroText}
 ${formatInboxForPrompt(inbox) || "TEAM MESSAGES: none since the last briefing."}
 
 INSTRUCTIONS:
+- Use ONLY the data above. If a section is empty or unavailable, say so naturally ("no flagged emails today") — do NOT invent events, emails, leads, intel, or attributions
 - Write as if you're speaking directly to Shannon at the start of a meeting
 - Conversational, confident, warm — you know Shannon well
 - Cover all four areas but naturally, not like a list

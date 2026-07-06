@@ -54,6 +54,7 @@ async function findArticlesForTopic(
     system: `You are Kiro, an intelligence analyst. Find recent, real articles and reports published in the last 48 hours.
 Prioritize: news sites, industry blogs, research reports, LinkedIn articles.
 Avoid: paywalled content, forums, job boards, opinion pieces older than 2 days.
+GROUNDING: include ONLY articles actually returned by your web search — never fabricate an article, headline, publication, or URL. Every url must be one you saw in search results. If nothing qualifies, return [].
 Return ONLY a valid JSON array, no other text.`,
     messages: [{
       role: "user",

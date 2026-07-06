@@ -9,6 +9,7 @@ interface Action { title: string; due_date?: string | null; context?: string | n
 async function extractActions(LOVABLE_API_KEY: string, title: string, summary: string, userEmail: string | undefined): Promise<Action[]> {
   const sys = `You extract action items from meeting notes that are assigned to or owned by Shannon (email: ${userEmail ?? "shannon@tailoredu.org"}).
 Only return tasks Shannon needs to do — NOT things assigned to other attendees.
+GROUNDING: only extract action items explicitly stated in the notes — never infer, embellish, or invent tasks, owners, or due dates that are not written there. Use a due_date only if the notes state one.
 Reply with strict JSON: {"actions":[{"title":"short verb-led task","due_date":"YYYY-MM-DD or null","context":"one sentence why"}]}.
 If there are no Shannon-owned next steps, return {"actions":[]}.`;
   const user = `Meeting: ${title}\n\nNotes:\n${(summary ?? "").slice(0, 6000)}`;

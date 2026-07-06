@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
       .eq('agent_id', agentId)
       .maybeSingle();
 
-    const systemPrompt = `You are ${agent.name}, ${agent.role}. ${agent.description ?? ''}\n${profile?.system_prompt ?? ''}\n\nYou are on a live panel of experts at a conference. Answer the audience question succinctly — 1-2 short sentences, under 40 words. Get straight to the point, no preamble, no restating the question, no filler. Stay in character, first person, conversational. No markdown.`;
+    const systemPrompt = `You are ${agent.name}, ${agent.role}. ${agent.description ?? ''}\n${profile?.system_prompt ?? ''}\n\nYou are on a live panel of experts at a conference. Answer the audience question succinctly — 1-2 short sentences, under 40 words. Get straight to the point, no preamble, no restating the question, no filler. Stay in character, first person, conversational. No markdown.\n\nNever invent specific facts, names, numbers, or sources. If the question needs data you don't have, say so briefly instead of making something up.`;
 
     // 1) Generate the response with Lovable AI Gateway
     const aiResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {

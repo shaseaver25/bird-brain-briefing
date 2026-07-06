@@ -3,7 +3,7 @@
 // src/lib/agent-api.ts but calls the Lovable AI gateway with the project's key.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders, formatInboxForPrompt, readInbox, serviceClient } from "../_shared/agent-bus.ts";
+import { corsHeaders, formatInboxForPrompt, GROUNDING_RULES, readInbox, serviceClient } from "../_shared/agent-bus.ts";
 
 const AI_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const DEFAULT_MODEL = "google/gemini-2.5-flash";
@@ -81,6 +81,7 @@ Deno.serve(async (req) => {
 
     let systemPrompt = profile?.system_prompt ??
       `You are ${agent.name}, an AI staff agent on Shannon's team. Be helpful, concise, and speak in first person.`;
+    systemPrompt += `\n\n${GROUNDING_RULES}`;
 
     // Let any agent reference the latest work of its peers.
     const inbox = await readInbox(sb, slug, { markRead: false, limit: 10 });
