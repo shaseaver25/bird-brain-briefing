@@ -217,7 +217,12 @@ Deno.serve(async (req) => {
         `${Deno.env.get("SUPABASE_URL")}/functions/v1/booking-create`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            // Service-role auth lets booking-create trust the forwarded
+            // visitor IP for its per-IP rate limit.
+            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
           body: JSON.stringify({
             start: chosenStart,
             name,
@@ -227,10 +232,17 @@ Deno.serve(async (req) => {
             source: "booking_agent",
             sourceDetail: [decision.reason && `reason: ${decision.reason}`, src && `src: ${src}`]
               .filter(Boolean).join("; "),
+            clientIp: req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown",
           }),
         },
       );
       const created = await createRes.json();
+      if (createRes.status === 429) {
+        return json({
+          reply: "It looks like you've hit the limit of 2 bookings per day. Please come back tomorrow, or email Shannon directly if it's urgent.",
+          action: "chat",
+        });
+      }
       if (!createRes.ok) {
         console.error("booking-agent create failed:", created);
         return json({
