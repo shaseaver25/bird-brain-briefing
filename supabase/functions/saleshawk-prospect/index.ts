@@ -161,7 +161,30 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { business, count = 10 } = await req.json();
+    // Require authenticated admin caller
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const authClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const { data: userData } = await authClient.auth.getUser();
+    const user = userData?.user;
+    if (!user) {
+      return new Response(JSON.stringify({ error: "unauthenticated" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { data: isAdmin } = await authClient.rpc("has_role", { _user_id: user.id, _role: "admin" });
+    if (!isAdmin) {
+      return new Response(JSON.stringify({ error: "forbidden" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { business, count: rawCount = 10 } = await req.json();
+    // Bound count server-side to prevent abuse
+    const count = Math.min(Math.max(1, Number(rawCount) || 10), 25);
 
     const preset = PRESETS[business];
     if (!preset) {

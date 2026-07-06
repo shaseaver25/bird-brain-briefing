@@ -21,10 +21,32 @@ function extractJson(text: string): any {
 }
 
 serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok');
+
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL'),
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   );
+
+  const authHeader = req.headers.get('Authorization') ?? '';
+  const authClient = createClient(
+    Deno.env.get('SUPABASE_URL'),
+    Deno.env.get('SUPABASE_ANON_KEY'),
+    { global: { headers: { Authorization: authHeader } } },
+  );
+  const { data: userData } = await authClient.auth.getUser();
+  const user = userData?.user;
+  if (!user) {
+    return new Response(JSON.stringify({ error: 'unauthenticated' }), {
+      status: 401, headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  const { data: isAdmin } = await authClient.rpc('has_role', { _user_id: user.id, _role: 'admin' });
+  if (!isAdmin) {
+    return new Response(JSON.stringify({ error: 'forbidden' }), {
+      status: 403, headers: { 'Content-Type': 'application/json' },
+    });
+  }
 
   const anthropic = new Anthropic({
     apiKey: Deno.env.get('ANTHROPIC_API_KEY'),
