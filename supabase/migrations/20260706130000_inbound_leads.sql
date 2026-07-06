@@ -11,7 +11,7 @@ create table if not exists public.inbound_leads (
   business text not null default 'unknown'
     check (business in ('realpath', 'tailoredu', 'aiwhisperers', 'stonearch', 'unknown')),
   source text not null default 'other'
-    check (source in ('booking_page', 'website_form', 'linkedin', 'referral', 'organic', 'other')),
+    check (source in ('booking_page', 'booking_agent', 'website_form', 'linkedin', 'referral', 'organic', 'other')),
   source_detail text,          -- utm string, referrer, post link, referrer name...
   notes text,
   status text not null default 'new'

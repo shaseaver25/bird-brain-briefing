@@ -9,3 +9,7 @@ verify_jwt = false
 # Public form-fill intake (validated + honeypot-guarded in the function)
 [functions.inbound-intake]
 verify_jwt = false
+
+# Public conversational scheduling agent behind /meet
+[functions.booking-agent]
+verify_jwt = false

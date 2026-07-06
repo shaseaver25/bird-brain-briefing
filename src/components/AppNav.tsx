@@ -10,14 +10,15 @@ const LINKS = [
   { to: "/voice", label: "Voice" },
   { to: "/my-agent", label: "My Agent" },
   { to: "/book", label: "Booking" },
+  { to: "/meet", label: "Swift" },
 ];
 
 export default function AppNav() {
   const location = useLocation();
   const [dashOpen, setDashOpen] = useState(false);
 
-  // The public booking page stands alone — no internal nav for visitors.
-  if (location.pathname === "/book") return null;
+  // Public visitor pages stand alone — no internal nav for visitors.
+  if (location.pathname === "/book" || location.pathname === "/meet") return null;
 
   return (
     <nav className="border-b border-border bg-background/95 sticky top-0 z-40">

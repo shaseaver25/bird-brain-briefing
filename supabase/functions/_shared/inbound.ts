@@ -6,6 +6,7 @@ import { postMessage, serviceClient } from "./agent-bus.ts";
 
 export const INBOUND_SOURCES = [
   "booking_page",
+  "booking_agent",
   "website_form",
   "linkedin",
   "referral",

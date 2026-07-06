@@ -1,23 +1,6 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import { recordInboundLead } from "../_shared/inbound.ts";
-
-const TZ = "America/Chicago";
-const SLOT_MIN = 30;
-
-async function getAccessToken(): Promise<string> {
-  const res = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: Deno.env.get("GOOGLE_CLIENT_ID")!,
-      client_secret: Deno.env.get("GOOGLE_CLIENT_SECRET")!,
-      refresh_token: Deno.env.get("GOOGLE_REFRESH_TOKEN_WREN")!,
-      grant_type: "refresh_token",
-    }),
-  });
-  if (!res.ok) throw new Error(`Google token refresh failed: ${await res.text()}`);
-  return (await res.json()).access_token;
-}
+import { ALLOWED_DURATIONS, getGoogleAccessToken, TZ } from "../_shared/availability.ts";
 
 function isEmail(s: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s); }
 
@@ -25,17 +8,21 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const body = await req.json();
-    const { start, name, email, notes, source, sourceDetail } = body ?? {};
+    const { start, name, email, notes, source, sourceDetail, durationMin } = body ?? {};
     if (!start || !name || !email) throw new Error("start, name, email required");
     if (!isEmail(email)) throw new Error("invalid email");
     if (typeof name !== "string" || name.length > 200) throw new Error("invalid name");
 
+    const slotMin = (ALLOWED_DURATIONS as readonly number[]).includes(Number(durationMin))
+      ? Number(durationMin)
+      : 30;
+
     const startDate = new Date(start);
     if (isNaN(startDate.getTime())) throw new Error("invalid start");
     if (startDate < new Date()) throw new Error("start in the past");
-    const endDate = new Date(startDate.getTime() + SLOT_MIN * 60 * 1000);
+    const endDate = new Date(startDate.getTime() + slotMin * 60 * 1000);
 
-    const accessToken = await getAccessToken();
+    const accessToken = await getGoogleAccessToken();
 
     // Re-check availability for this exact slot (defense vs race / stale UI)
     const fbRes = await fetch("https://www.googleapis.com/calendar/v3/freeBusy", {
@@ -83,7 +70,7 @@ Deno.serve(async (req) => {
 
     // Attribution: log the booking as an inbound lead and alert the team.
     // Fire-and-forget — the booking must succeed even if intake fails.
-    // @ts-ignore EdgeRuntime
+    // @ts-expect-error EdgeRuntime is provided by the Supabase edge runtime
     EdgeRuntime.waitUntil(recordInboundLead({
       name,
       email,
