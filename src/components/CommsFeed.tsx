@@ -10,14 +10,19 @@ const KIND_STYLES: Record<string, string> = {
   alert: "bg-destructive/15 text-destructive",
 };
 
+// Agents that post to the bus but aren't on the staff-meeting chat roster.
+const EXTRA_AGENTS: Record<string, { name: string; accentColor: string }> = {
+  swift: { name: "Swift", accentColor: "150 70% 45%" },
+};
+
 function agentColor(slug: string): string {
-  const agent = DEFAULT_AGENTS.find((a) => a.id === slug);
+  const agent = DEFAULT_AGENTS.find((a) => a.id === slug) ?? EXTRA_AGENTS[slug];
   return agent ? `hsl(${agent.accentColor})` : "hsl(var(--muted-foreground))";
 }
 
 function agentName(slug: string): string {
   if (slug === "all") return "everyone";
-  return DEFAULT_AGENTS.find((a) => a.id === slug)?.name ?? slug;
+  return DEFAULT_AGENTS.find((a) => a.id === slug)?.name ?? EXTRA_AGENTS[slug]?.name ?? slug;
 }
 
 function relativeTime(iso: string): string {

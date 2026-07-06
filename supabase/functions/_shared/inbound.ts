@@ -72,8 +72,11 @@ export async function recordInboundLead(lead: InboundLead): Promise<void> {
       return;
     }
 
+    // Bookings are announced by Swift (the scheduling agent); other inbound
+    // leads by SalesHawk (the pipeline owner).
+    const announcer = source === "booking_page" || source === "booking_agent" ? "swift" : "saleshawk";
     await postMessage(sb, {
-      from: "saleshawk",
+      from: announcer,
       kind: "alert",
       subject: `New inbound: ${lead.name}${lead.company ? ` (${lead.company})` : ""} via ${source.replace("_", " ")}`,
       payload: {
