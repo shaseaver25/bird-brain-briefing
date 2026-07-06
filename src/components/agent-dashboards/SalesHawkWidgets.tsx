@@ -459,12 +459,120 @@ function FollowUpQueueWidget() {
 export default function SalesHawkWidgets() {
   return (
     <div className="space-y-6">
+      <InboundLeadsWidget />
       <TodaysFindsWidget />
       <NetworkingWidget />
       {/* Deal Values, Pipeline Funnel, and Follow-Up Queue are hidden until
           they're wired to real CRM data. See DealValuesWidget, PipelineFunnelWidget,
           FollowUpQueueWidget above — kept in the file for future re-enablement. */}
     </div>
+  );
+}
+
+// --- Inbound Leads Widget (source-tagged intake) ---
+
+interface InboundLeadRow {
+  id: string;
+  name: string;
+  email: string;
+  company: string | null;
+  business: string;
+  source: string;
+  source_detail: string | null;
+  notes: string | null;
+  status: string;
+  created_at: string;
+}
+
+const SOURCE_LABELS: Record<string, string> = {
+  booking_page: "Booking page",
+  website_form: "Website form",
+  linkedin: "LinkedIn",
+  referral: "Referral",
+  organic: "Organic",
+  other: "Other",
+};
+
+function InboundLeadsWidget() {
+  const [leads, setLeads] = useState<InboundLeadRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      // Table may not exist until the inbound_leads migration runs — fail quiet.
+      const { data, error } = await (supabase.from("inbound_leads" as never) as ReturnType<typeof supabase.from>)
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (cancelled) return;
+      if (!error && data) setLeads(data as unknown as InboundLeadRow[]);
+      setLoading(false);
+    }
+    load();
+    const poll = setInterval(load, 60_000);
+    return () => { cancelled = true; clearInterval(poll); };
+  }, []);
+
+  const bySource = leads.reduce<Record<string, number>>((acc, l) => {
+    acc[l.source] = (acc[l.source] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Target className="h-5 w-5 text-primary" />
+          Inbound Leads
+        </CardTitle>
+        <CardDescription>
+          People who came to you — every one tagged with its source. Share tagged links
+          (e.g. /book?src=linkedin) to keep attribution clean.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {leads.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(bySource).map(([source, count]) => (
+              <Badge key={source} variant="secondary" className="text-xs">
+                {SOURCE_LABELS[source] ?? source}: {count}
+              </Badge>
+            ))}
+          </div>
+        )}
+        {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
+        {!loading && leads.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            No inbound leads recorded yet. Bookings land here automatically; point website
+            forms at the inbound-intake endpoint to capture form fills too.
+          </p>
+        )}
+        {leads.map((lead) => (
+          <div key={lead.id} className="flex items-start gap-3 rounded-md border border-border/60 px-3 py-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">
+                {lead.name}
+                {lead.company && <span className="text-muted-foreground font-normal"> · {lead.company}</span>}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {lead.email}
+                {lead.source_detail && ` · ${lead.source_detail}`}
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              <Badge variant="outline" className="text-[10px]">
+                {SOURCE_LABELS[lead.source] ?? lead.source}
+              </Badge>
+              <span className="text-[10px] text-muted-foreground">
+                {new Date(lead.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                {" · "}{lead.status.replace("_", " ")}
+              </span>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 

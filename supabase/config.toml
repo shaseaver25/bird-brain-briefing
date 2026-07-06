@@ -5,3 +5,7 @@ verify_jwt = false
 
 [functions.booking-create]
 verify_jwt = false
+
+# Public form-fill intake (validated + honeypot-guarded in the function)
+[functions.inbound-intake]
+verify_jwt = false

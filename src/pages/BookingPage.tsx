@@ -22,6 +22,28 @@ function timeLabel(iso: string) {
   });
 }
 
+// Attribution: read the traffic source from the link that brought the
+// visitor here (e.g. /book?src=linkedin, or standard utm_source params),
+// falling back to the referrer. Share tagged links to get clean data.
+function detectSource(): { source: string; sourceDetail: string } {
+  const params = new URLSearchParams(window.location.search);
+  const src = (params.get("src") ?? params.get("utm_source") ?? "").toLowerCase();
+  const detailParts = [
+    params.get("utm_source") && `utm_source=${params.get("utm_source")}`,
+    params.get("utm_medium") && `utm_medium=${params.get("utm_medium")}`,
+    params.get("utm_campaign") && `utm_campaign=${params.get("utm_campaign")}`,
+    document.referrer && `referrer=${document.referrer}`,
+  ].filter(Boolean);
+  const detail = detailParts.join("; ").slice(0, 500);
+
+  if (["linkedin", "referral", "organic", "website_form"].includes(src)) {
+    return { source: src, sourceDetail: detail };
+  }
+  if (src) return { source: "other", sourceDetail: `src=${src}${detail ? "; " + detail : ""}` };
+  if (/linkedin\.com/i.test(document.referrer)) return { source: "linkedin", sourceDetail: detail };
+  return { source: "booking_page", sourceDetail: detail };
+}
+
 export default function BookingPage() {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,10 +84,11 @@ export default function BookingPage() {
     if (!selectedSlot || !name || !email) return;
     setSubmitting(true);
     try {
+      const { source, sourceDetail } = detectSource();
       const res = await fetch(`${FN_BASE}/booking-create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ start: selectedSlot.start, name, email, notes }),
+        body: JSON.stringify({ start: selectedSlot.start, name, email, notes, source, sourceDetail }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Booking failed");

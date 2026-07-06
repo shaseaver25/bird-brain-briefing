@@ -88,6 +88,26 @@ Deno.serve(async (req) => {
     const inboxText = formatInboxForPrompt(inbox);
     if (inboxText) systemPrompt += `\n\n${inboxText}`;
 
+    // SalesHawk gets the source-tagged inbound pipeline so attribution
+    // questions are answered from records, never invented.
+    if (slug === "saleshawk") {
+      const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: inboundLeads } = await sb
+        .from("inbound_leads")
+        .select("name, company, email, source, source_detail, business, status, created_at")
+        .gte("created_at", twoWeeksAgo)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (inboundLeads && inboundLeads.length > 0) {
+        const lines = inboundLeads.map((l: Record<string, unknown>) =>
+          `- ${l.name}${l.company ? ` (${l.company})` : ""} — source: ${l.source}${l.source_detail ? ` [${l.source_detail}]` : ""}, status: ${l.status}, ${String(l.created_at).slice(0, 10)}`
+        );
+        systemPrompt += `\n\nINBOUND LEADS (last 14 days, source-tagged from the intake system — this is your ONLY attribution data):\n${lines.join("\n")}`;
+      } else {
+        systemPrompt += `\n\nINBOUND LEADS: none recorded in the last 14 days. If asked about inbound leads or attribution, say the intake system has no records — do not invent any.`;
+      }
+    }
+
     if (meetingMode) {
       const others = MEETING_ROSTER.filter((n) => n.toLowerCase() !== agent.name.toLowerCase()).join(", ");
       const transcript = Array.isArray(meetingTranscript) ? meetingTranscript.slice(-10).join("\n") : "";

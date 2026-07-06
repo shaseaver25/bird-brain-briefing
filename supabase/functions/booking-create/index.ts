@@ -1,4 +1,5 @@
 import { corsHeaders } from "../_shared/cors.ts";
+import { recordInboundLead } from "../_shared/inbound.ts";
 
 const TZ = "America/Chicago";
 const SLOT_MIN = 30;
@@ -24,7 +25,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const body = await req.json();
-    const { start, name, email, notes } = body ?? {};
+    const { start, name, email, notes, source, sourceDetail } = body ?? {};
     if (!start || !name || !email) throw new Error("start, name, email required");
     if (!isEmail(email)) throw new Error("invalid email");
     if (typeof name !== "string" || name.length > 200) throw new Error("invalid name");
@@ -79,6 +80,18 @@ Deno.serve(async (req) => {
     );
     if (!createRes.ok) throw new Error(`Calendar create error: ${await createRes.text()}`);
     const created = await createRes.json();
+
+    // Attribution: log the booking as an inbound lead and alert the team.
+    // Fire-and-forget — the booking must succeed even if intake fails.
+    // @ts-ignore EdgeRuntime
+    EdgeRuntime.waitUntil(recordInboundLead({
+      name,
+      email,
+      notes: notes ?? undefined,
+      source: typeof source === "string" && source ? source : "booking_page",
+      sourceDetail: typeof sourceDetail === "string" ? sourceDetail.slice(0, 500) : undefined,
+      status: "demo_booked",
+    }));
 
     return new Response(
       JSON.stringify({

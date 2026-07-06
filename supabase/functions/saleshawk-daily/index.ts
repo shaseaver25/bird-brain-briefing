@@ -263,6 +263,20 @@ async function runProspecting(): Promise<void> {
   const inserted = allFinds.filter((f) => f.status === "inserted");
   const runTime = new Date().toISOString();
 
+  // Inbound picture for the same window — outbound finds mean little
+  // without knowing what walked in the door on its own.
+  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data: inboundRows } = await staffMeetingSupabase
+    .from("inbound_leads")
+    .select("name, company, source, business, status, created_at")
+    .gte("created_at", dayAgo)
+    .order("created_at", { ascending: false });
+  const inbound = inboundRows ?? [];
+  const inboundBySource: Record<string, number> = {};
+  for (const l of inbound) {
+    inboundBySource[l.source] = (inboundBySource[l.source] ?? 0) + 1;
+  }
+
   await staffMeetingSupabase.from("widget_data").upsert(
     {
       agent_id: "saleshawk",
@@ -272,6 +286,7 @@ async function runProspecting(): Promise<void> {
         run_time: runTime,
         total: inserted.length,
         finds: allFinds,
+        inbound_24h: { total: inbound.length, by_source: inboundBySource, leads: inbound },
       },
       expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       updated_at: runTime,
@@ -280,14 +295,19 @@ async function runProspecting(): Promise<void> {
   );
 
   const topLead = [...inserted].sort((a, b) => b.score - a.score)[0];
+  const inboundSummary = inbound.length === 0
+    ? "no inbound in 24h"
+    : `${inbound.length} inbound in 24h (${Object.entries(inboundBySource).map(([s, n]) => `${n} ${s.replace("_", " ")}`).join(", ")})`;
   await postMessage(staffMeetingSupabase, {
     from: "saleshawk",
-    subject: inserted.length === 0
-      ? "Prospecting run: no new leads today"
-      : `${inserted.length} new lead${inserted.length !== 1 ? "s" : ""}${topLead ? `; top: ${topLead.name} at ${topLead.company} (score ${topLead.score})` : ""}`,
+    subject: (inserted.length === 0
+      ? "Prospecting run: no new outbound leads today"
+      : `${inserted.length} new outbound lead${inserted.length !== 1 ? "s" : ""}${topLead ? `; top: ${topLead.name} at ${topLead.company} (score ${topLead.score})` : ""}`)
+      + `; ${inboundSummary}`,
     payload: {
       count: inserted.length,
       top_lead: topLead ? { name: topLead.name, company: topLead.company, score: topLead.score, business: topLead.business } : null,
+      inbound_24h: { total: inbound.length, by_source: inboundBySource },
     },
   });
 
