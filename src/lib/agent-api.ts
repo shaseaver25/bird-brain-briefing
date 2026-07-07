@@ -260,12 +260,29 @@ export async function sendAgentMessage(
 ): Promise<AgentResponse> {
   const mode = await getBackendMode();
 
+  // Preferred path per the user's Backend Mode setting — but NEVER hard-fail on
+  // it. A direct Claude API call (MCP) or legacy Lambda can fail for reasons the
+  // user can't see: an expired/invalid Anthropic key, a model the key can't
+  // access, CORS, or a timeout. When that happens, fall back to the built-in
+  // edge function, which needs no user config and is the recommended default.
+  // Without this, a misconfigured MCP toggle shows "Connection error" on every
+  // 1:1 chat even though the edge backend is healthy.
   if (mode === "mcp" && anthropicKey) {
-    return callMcp(request, anthropicKey);
+    try {
+      return await callMcp(request, anthropicKey);
+    } catch (mcpErr) {
+      console.warn("MCP backend failed — falling back to edge function:", mcpErr);
+      return callEdge(request);
+    }
   }
 
   if (mode === "legacy" && legacyApiUrl) {
-    return callLegacy(legacyApiUrl, request.agentId, request.message);
+    try {
+      return await callLegacy(legacyApiUrl, request.agentId, request.message);
+    } catch (legacyErr) {
+      console.warn("Legacy backend failed — falling back to edge function:", legacyErr);
+      return callEdge(request);
+    }
   }
 
   // Default path: built-in edge function. Fall back to whatever the user has
