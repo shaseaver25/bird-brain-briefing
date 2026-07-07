@@ -337,7 +337,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  // @ts-ignore
+  // @ts-expect-error EdgeRuntime is provided by the Supabase edge runtime
   EdgeRuntime.waitUntil(runProspecting().catch((err) => console.error("saleshawk-daily error:", err)));
 
   return new Response(

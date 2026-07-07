@@ -163,12 +163,14 @@ function useLiveWrenData() {
   }
 
   useEffect(() => {
-    // Load cached data immediately for instant display, then refresh in background
+    // Mount-only: show cached data immediately, then refresh in the background.
+    // loadCachedData/refresh are stable in intent here; re-running on their
+    // identity would loop, so this initializer runs once.
     loadCachedData().then((hasCached) => {
       if (hasCached) setLoading(false);
-      // Always kick off a fresh refresh (runs in background after showing cached)
       refresh();
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return { calendarItems, emailItems, loading, refreshing, lastUpdated, refresh };

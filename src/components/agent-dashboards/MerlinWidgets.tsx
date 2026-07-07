@@ -18,6 +18,7 @@ import {
 import { Layers, HeartPulse, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/lib/untyped-db";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -381,7 +382,8 @@ function ProjectBoardWidget({
   const toggleBoard = (id: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   const totalOpenCrm = (crmBoards ?? []).reduce((s, b) => s + b.open, 0);
@@ -837,12 +839,11 @@ function MeetingActionItemsWidget() {
   const [msg, setMsg] = useState<string | null>(null);
 
   async function load() {
-    const { data } = await (supabase
-      .from("merlin_action_items" as any)
+    const { data } = await db("merlin_action_items")
       .select("*")
       .order("status", { ascending: true })
       .order("created_at", { ascending: false })
-      .limit(50) as any);
+      .limit(50);
     setItems((data ?? []) as ActionItem[]);
     setLoading(false);
   }
@@ -864,12 +865,12 @@ function MeetingActionItemsWidget() {
 
   async function cycle(item: ActionItem) {
     const next: ActionItem["status"] = item.status === "todo" ? "in_progress" : item.status === "in_progress" ? "done" : "todo";
-    await (supabase.from("merlin_action_items" as any) as any).update({ status: next, updated_at: new Date().toISOString() }).eq("id", item.id);
+    await db("merlin_action_items").update({ status: next, updated_at: new Date().toISOString() }).eq("id", item.id);
     setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, status: next } : i)));
   }
 
   async function remove(id: string) {
-    await (supabase.from("merlin_action_items" as any) as any).delete().eq("id", id);
+    await db("merlin_action_items").delete().eq("id", id);
     setItems((prev) => prev.filter((i) => i.id !== id));
   }
 

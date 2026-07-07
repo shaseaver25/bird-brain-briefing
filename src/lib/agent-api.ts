@@ -8,8 +8,19 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/lib/untyped-db";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
+
+interface AgentRow { id: string }
+interface AgentProfile {
+  system_prompt: string;
+  model: string;
+  temperature: number;
+  max_tokens: number;
+  metadata: Record<string, unknown>;
+}
+interface ConversationRow { role: "user" | "assistant"; content: string }
 
 // Mirrors GROUNDING_RULES in supabase/functions/_shared/agent-bus.ts —
 // keep the two in sync so every chat path enforces the same rules.
@@ -88,33 +99,21 @@ const OPENCLAW_NAME_MAP: Record<string, string> = {
   "warbler": "Warbler",
 };
 
-async function resolveAgentProfile(agentId: string): Promise<{
-  system_prompt: string;
-  model: string;
-  temperature: number;
-  max_tokens: number;
-  metadata: Record<string, unknown>;
-} | null> {
+async function resolveAgentProfile(agentId: string): Promise<AgentProfile | null> {
   // Resolve display name from OpenClaw id or use as-is
   const displayName = OPENCLAW_NAME_MAP[agentId.toLowerCase()] || agentId;
 
   // Look up agent UUID by name
-  const { data: agent } = await (supabase
-    .from("agents" as any)
-    .select("id")
-    .ilike("name", displayName)
-    .single() as any);
-
+  const { data: agent } = await db("agents").select("id").ilike("name", displayName).single();
   if (!agent) return null;
 
-  const { data: profile } = await (supabase
-    .from("agent_profiles" as any)
+  const { data: profile } = await db("agent_profiles")
     .select("system_prompt, model, temperature, max_tokens, metadata")
-    .eq("agent_id", agent.id)
+    .eq("agent_id", (agent as AgentRow).id)
     .eq("is_active", true)
-    .single() as any);
+    .single();
 
-  return profile ?? null;
+  return (profile as AgentProfile | null) ?? null;
 }
 
 async function loadHistory(agentId: string, sessionId: string, limit = 40): Promise<{ role: "user" | "assistant"; content: string }[]> {
@@ -122,24 +121,23 @@ async function loadHistory(agentId: string, sessionId: string, limit = 40): Prom
   if (!user) return [];
 
   const displayName = OPENCLAW_NAME_MAP[agentId.toLowerCase()] || agentId;
-  const { data: agent } = await (supabase.from("agents" as any).select("id").ilike("name", displayName).single() as any);
+  const { data: agent } = await db("agents").select("id").ilike("name", displayName).single();
   if (!agent) return [];
 
   // Load recent messages across all sessions in the last 14 days,
   // so the agent has cross-session memory. Older rows are auto-purged by cron.
   const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
-  const { data } = await (supabase
-    .from("conversations" as any)
+  const { data } = await db("conversations")
     .select("role, content")
     .eq("user_id", user.id)
-    .eq("agent_id", agent.id)
+    .eq("agent_id", (agent as AgentRow).id)
     .gte("created_at", cutoff)
     .order("created_at", { ascending: false })
-    .limit(limit) as any);
+    .limit(limit);
 
   // Reverse to chronological order for the model
-  return (data ?? [])
-    .map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content }))
+  return ((data as ConversationRow[] | null) ?? [])
+    .map((m) => ({ role: m.role, content: m.content }))
     .reverse();
 }
 
@@ -148,12 +146,13 @@ async function saveHistory(agentId: string, sessionId: string, userMsg: string, 
   if (!user) return;
 
   const displayName = OPENCLAW_NAME_MAP[agentId.toLowerCase()] || agentId;
-  const { data: agent } = await (supabase.from("agents" as any).select("id").ilike("name", displayName).single() as any);
+  const { data: agent } = await db("agents").select("id").ilike("name", displayName).single();
   if (!agent) return;
 
-  await (supabase.from("conversations" as any) as any).insert([
-    { user_id: user.id, agent_id: agent.id, session_id: sessionId, role: "user", content: userMsg },
-    { user_id: user.id, agent_id: agent.id, session_id: sessionId, role: "assistant", content: assistantMsg },
+  const agentUuid = (agent as AgentRow).id;
+  await db("conversations").insert([
+    { user_id: user.id, agent_id: agentUuid, session_id: sessionId, role: "user", content: userMsg },
+    { user_id: user.id, agent_id: agentUuid, session_id: sessionId, role: "assistant", content: assistantMsg },
   ]);
 }
 

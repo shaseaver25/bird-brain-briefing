@@ -134,7 +134,7 @@ async function runFinance(): Promise<void> {
   const cash = banks.reduce((s, a) => s + (Number(a.CurrentBalance) || 0), 0);
 
   // Revenue by business — P&L split by Class (maps to the three businesses).
-  let revenueByBusiness: Record<string, number> = {};
+  const revenueByBusiness: Record<string, number> = {};
   let totalRevenue = 0;
   try {
     const pl = await qbReport(accessToken, realmId, "ProfitAndLoss", { start_date: yearStart, end_date: today, summarize_column_by: "Classes" });

@@ -5,7 +5,11 @@ import { useNavigate } from "react-router-dom";
 import { textToSpeech } from "@/lib/elevenlabs";
 import { sendAgentMessage, getSessionId } from "@/lib/agent-api";
 import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/lib/untyped-db";
 import { AgentConfig } from "@/hooks/useAgentStore";
+
+interface AgentRow { id: string }
+interface ConversationRow { role: string; content: string; created_at?: string }
 
 import merlinAvatar from "@/assets/merlin-avatar.png";
 import ospreyAvatar from "@/assets/osprey-avatar.png";
@@ -88,23 +92,18 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
         if (!user) return;
         const aid = (agent.agentId || agent.id).toLowerCase();
         const displayName = NAME_MAP[aid] || agent.name;
-        const { data: agentRow } = await (supabase
-          .from("agents" as any)
-          .select("id")
-          .ilike("name", displayName)
-          .single() as any);
+        const { data: agentRow } = await db("agents").select("id").ilike("name", displayName).single();
         if (!agentRow) return;
         const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
-        const { data } = await (supabase
-          .from("conversations" as any)
+        const { data } = await db("conversations")
           .select("role, content, created_at")
           .eq("user_id", user.id)
-          .eq("agent_id", agentRow.id)
+          .eq("agent_id", (agentRow as AgentRow).id)
           .gte("created_at", cutoff)
           .order("created_at", { ascending: true })
-          .limit(60) as any);
+          .limit(60);
         if (cancelled || !data) return;
-        const history: ChatMessage[] = data.map((m: any) => ({
+        const history: ChatMessage[] = (data as ConversationRow[]).map((m) => ({
           role: m.role === "user" ? "user" : "agent",
           text: m.content,
         }));
@@ -124,17 +123,12 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
       if (!user) return;
       const aid = (agent.agentId || agent.id).toLowerCase();
       const displayName = NAME_MAP[aid] || agent.name;
-      const { data: agentRow } = await (supabase
-        .from("agents" as any)
-        .select("id")
-        .ilike("name", displayName)
-        .single() as any);
+      const { data: agentRow } = await db("agents").select("id").ilike("name", displayName).single();
       if (!agentRow) return;
-      await (supabase
-        .from("conversations" as any)
+      await db("conversations")
         .delete()
         .eq("user_id", user.id)
-        .eq("agent_id", agentRow.id) as any);
+        .eq("agent_id", (agentRow as AgentRow).id);
       setMessages([]);
     } catch (e) {
       console.error("Failed to clear history:", e);
@@ -168,7 +162,7 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
       setIsThinking(false);
       return errorMsg;
     }
-  }, [agent]);
+  }, [agent, anthropicKey, apiKey]);
 
   // Meeting-aware send: includes transcript of what other agents said
   const sendMeetingMessage = useCallback(async (text: string, transcript: string[]): Promise<string> => {

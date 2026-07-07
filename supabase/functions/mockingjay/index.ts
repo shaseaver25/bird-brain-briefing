@@ -11,12 +11,12 @@ function extractJson(text: string): any {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const candidate = fenced ? fenced[1] : text;
   // First try direct parse
-  try { return JSON.parse(candidate.trim()); } catch (_) {}
+  try { return JSON.parse(candidate.trim()); } catch (_) { /* not valid JSON — fall through */ }
   // Fall back: find first { ... last }
   const start = candidate.indexOf('{');
   const end = candidate.lastIndexOf('}');
   if (start >= 0 && end > start) {
-    try { return JSON.parse(candidate.slice(start, end + 1)); } catch (_) {}
+    try { return JSON.parse(candidate.slice(start, end + 1)); } catch (_) { /* still not valid — give up */ }
   }
   return null;
 }

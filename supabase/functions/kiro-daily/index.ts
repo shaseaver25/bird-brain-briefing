@@ -214,7 +214,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  // @ts-ignore
+  // @ts-expect-error EdgeRuntime is provided by the Supabase edge runtime
   EdgeRuntime.waitUntil(
     runKiroIntel().catch((err) => console.error("kiro-daily error:", err))
   );
