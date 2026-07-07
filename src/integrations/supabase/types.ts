@@ -399,6 +399,48 @@ export type Database = {
         }
         Relationships: []
       }
+      clients: {
+        Row: {
+          business: string
+          cadence_days: number
+          company: string | null
+          created_at: string
+          id: string
+          last_touch_at: string
+          name: string
+          notes: string | null
+          signed_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          business?: string
+          cadence_days?: number
+          company?: string | null
+          created_at?: string
+          id?: string
+          last_touch_at?: string
+          name: string
+          notes?: string | null
+          signed_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          business?: string
+          cadence_days?: number
+          company?: string | null
+          created_at?: string
+          id?: string
+          last_touch_at?: string
+          name?: string
+          notes?: string | null
+          signed_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
           agent_id: string
@@ -473,6 +515,134 @@ export type Database = {
           theme?: string
           updated_at?: string
           version?: number
+        }
+        Relationships: []
+      }
+      finance_snapshots: {
+        Row: {
+          cash_position: number | null
+          created_at: string
+          id: string
+          is_connected: boolean
+          revenue_by_business: Json
+          source: string
+          summary: string | null
+          unpaid_invoices_count: number | null
+          unpaid_invoices_total: number | null
+        }
+        Insert: {
+          cash_position?: number | null
+          created_at?: string
+          id?: string
+          is_connected?: boolean
+          revenue_by_business?: Json
+          source?: string
+          summary?: string | null
+          unpaid_invoices_count?: number | null
+          unpaid_invoices_total?: number | null
+        }
+        Update: {
+          cash_position?: number | null
+          created_at?: string
+          id?: string
+          is_connected?: boolean
+          revenue_by_business?: Json
+          source?: string
+          summary?: string | null
+          unpaid_invoices_count?: number | null
+          unpaid_invoices_total?: number | null
+        }
+        Relationships: []
+      }
+      guidebook_concepts: {
+        Row: {
+          bloom_level: string | null
+          concept_key: string
+          content: string | null
+          created_at: string
+          definition: string | null
+          guidebook_id: string
+          id: string
+          label: string
+          learning_objective: string | null
+          prerequisites: string[]
+          sort_order: number
+        }
+        Insert: {
+          bloom_level?: string | null
+          concept_key: string
+          content?: string | null
+          created_at?: string
+          definition?: string | null
+          guidebook_id: string
+          id?: string
+          label: string
+          learning_objective?: string | null
+          prerequisites?: string[]
+          sort_order?: number
+        }
+        Update: {
+          bloom_level?: string | null
+          concept_key?: string
+          content?: string | null
+          created_at?: string
+          definition?: string | null
+          guidebook_id?: string
+          id?: string
+          label?: string
+          learning_objective?: string | null
+          prerequisites?: string[]
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guidebook_concepts_guidebook_id_fkey"
+            columns: ["guidebook_id"]
+            isOneToOne: false
+            referencedRelation: "guidebooks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      guidebooks: {
+        Row: {
+          audience: string | null
+          created_at: string
+          error: string | null
+          id: string
+          knowledge_graph: Json
+          learning_objectives: string[]
+          status: string
+          summary: string | null
+          title: string | null
+          topic: string
+          updated_at: string
+        }
+        Insert: {
+          audience?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          knowledge_graph?: Json
+          learning_objectives?: string[]
+          status?: string
+          summary?: string | null
+          title?: string | null
+          topic: string
+          updated_at?: string
+        }
+        Update: {
+          audience?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          knowledge_graph?: Json
+          learning_objectives?: string[]
+          status?: string
+          summary?: string | null
+          title?: string | null
+          topic?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -823,6 +993,27 @@ export type Database = {
         }
         Relationships: []
       }
+      quickbooks_auth: {
+        Row: {
+          id: number
+          realm_id: string | null
+          refresh_token: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          realm_id?: string | null
+          refresh_token?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          realm_id?: string | null
+          refresh_token?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       saleshawk_networking_queue: {
         Row: {
           ai_reasoning: string | null
@@ -1004,6 +1195,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _has_role_available: { Args: never; Returns: boolean }
       exec_agent_migration: { Args: { _build_id: string }; Returns: Json }
       has_role: {
         Args: {
