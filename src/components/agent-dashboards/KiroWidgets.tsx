@@ -180,7 +180,7 @@ function IntelFeedWidget() {
           </div>
         </div>
         <CardDescription>
-          {loading ? "Loading…" : running ? "Kiro is scanning sources…" :
+          {loading ? "Loading…" : running ? "Warbler is scanning sources…" :
             `${allArticles.length} articles in the last 2 weeks${topCount > 0 ? ` · ${topCount} top-10% signal${topCount === 1 ? "" : "s"}` : ""}`}
         </CardDescription>
 

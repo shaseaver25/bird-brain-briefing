@@ -84,8 +84,8 @@ const OPENCLAW_NAME_MAP: Record<string, string> = {
   "forge": "Osprey",
   "saleshawk": "SalesHawk",
   "merlin": "Merlin",
-  "kiro": "Kiro",
-  "warbler": "Kiro",
+  "kiro": "Warbler",
+  "warbler": "Warbler",
 };
 
 async function resolveAgentProfile(agentId: string): Promise<{
@@ -191,7 +191,7 @@ async function callMcp(request: AgentRequest, anthropicKey: string): Promise<Age
   // Add meeting context if needed
   if (request.meetingMode) {
     const agentName = (profile.metadata?.display_name as string) ?? request.agentId;
-    const others = ["Wren", "SalesHawk", "Osprey", "Merlin", "Kiro"]
+    const others = ["Wren", "SalesHawk", "Osprey", "Merlin", "Warbler"]
       .filter((n) => n.toLowerCase() !== agentName.toLowerCase()).join(", ");
     const transcript = request.meetingTranscript?.slice(-10).join("\n") ?? "";
     if (transcript) systemPrompt += `\n\n--- MEETING TRANSCRIPT ---\n${transcript}\n--- END TRANSCRIPT ---`;
