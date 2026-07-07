@@ -1,0 +1,1 @@
+INSERT INTO public.agents (slug, name, role) VALUES ('guidebook', 'Owl', 'Intelligent Guidebooks'), ('magpie', 'Magpie', 'Finance Lead') ON CONFLICT (slug) DO NOTHING;
