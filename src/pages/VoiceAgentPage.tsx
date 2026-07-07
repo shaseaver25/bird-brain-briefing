@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useConversation } from "@elevenlabs/react";
+import { ConversationProvider, useConversation } from "@elevenlabs/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Mic, MicOff, Loader2 } from "lucide-react";
 
 const STORAGE_KEY = "elevenlabs_agent_id";
 
-export default function VoiceAgentPage() {
+function VoiceAgentPageInner() {
   const [agentId, setAgentId] = useState<string>(
     () => (typeof window !== "undefined" && localStorage.getItem(STORAGE_KEY)) || "",
   );
@@ -152,5 +152,13 @@ export default function VoiceAgentPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function VoiceAgentPage() {
+  return (
+    <ConversationProvider>
+      <VoiceAgentPageInner />
+    </ConversationProvider>
   );
 }
