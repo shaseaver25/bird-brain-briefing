@@ -90,7 +90,7 @@ export default function OwlWidgets() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-lg font-semibold flex items-center gap-2">🦉 Owl — Legislation Tracker</h2>
+          <h2 className="text-lg font-semibold flex items-center gap-2">🦅 Eagle — Legal Eagle</h2>
           {summary?.scanned_at && (
             <p className="text-xs text-muted-foreground mt-0.5">Last scan: {new Date(summary.scanned_at).toLocaleString()}</p>
           )}
@@ -105,7 +105,7 @@ export default function OwlWidgets() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Tracked Topics</CardTitle>
-          <CardDescription>Owl monitors federal and state legislation matching these topics.</CardDescription>
+          <CardDescription>Eagle monitors federal and state legislation matching these topics.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-wrap gap-2">
@@ -129,7 +129,7 @@ export default function OwlWidgets() {
       {summary?.summary && (
         <div className="border-l-4 border-amber-500 bg-amber-500/5 px-4 py-3 rounded-r-md">
           <p className="text-sm leading-relaxed">
-            <span className="font-semibold">Owl's overall summary:</span> {summary.summary}
+            <span className="font-semibold">Eagle's overall summary:</span> {summary.summary}
           </p>
           {summary.item_count !== undefined && (
             <p className="text-xs text-muted-foreground mt-2">{summary.item_count} bills across {summary.topics.length} topic(s)</p>
