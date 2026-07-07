@@ -51,7 +51,7 @@ async function findArticlesForTopic(
     model: "claude-sonnet-4-6",
     max_tokens: 2048,
     tools: [{ type: "web_search_20250305", name: "web_search" }] as any,
-    system: `You are Kiro, an intelligence analyst. Find recent, real articles and reports published in the last 48 hours.
+    system: `You are Warbler, an intelligence analyst. Find recent, real articles and reports published in the last 48 hours.
 Prioritize: news sites, industry blogs, research reports, LinkedIn articles.
 Avoid: paywalled content, forums, job boards, opinion pieces older than 2 days.
 GROUNDING: include ONLY articles actually returned by your web search — never fabricate an article, headline, publication, or URL. Every url must be one you saw in search results. If nothing qualifies, return [].

@@ -69,7 +69,7 @@ export const DEFAULT_AGENTS: AgentConfig[] = [
   },
   {
     id: "kiro",
-    name: "Kiro",
+    name: "Warbler",
     emoji: "🐤",
     role: "Intelligence Analyst",
     voiceId: "ErXwobaYiN019PkySvjV",
@@ -106,9 +106,10 @@ function mergeWithDefaults(agents: AgentConfig[]): AgentConfig[] {
   const existingIds = new Set(agents.map((a) => a.id));
   const missing = DEFAULT_AGENTS.filter((d) => !existingIds.has(d.id));
   return [...agents, ...missing].map((a, i) => {
-    // One-time repair: saved configs may still carry the old "Warbler /
-    // Cloud Orchestrator" identity for the kiro agent (with a stale Lambda URL).
-    if (a.id === "kiro" && a.name === "Warbler") {
+    // The intelligence agent is "Warbler / Intelligence Analyst". Repair any
+    // saved config that carries the old "Kiro" name or the stale "Cloud
+    // Orchestrator" role + Lambda URL. Slug stays "kiro".
+    if (a.id === "kiro" && (a.name === "Kiro" || a.role === "Cloud Orchestrator")) {
       const fresh = DEFAULT_AGENTS.find((d) => d.id === "kiro")!;
       a = { ...a, name: fresh.name, emoji: fresh.emoji, role: fresh.role, apiUrl: fresh.apiUrl };
     }

@@ -16,13 +16,13 @@ const NAME_MAP: Record<string, string> = {
   osprey: "Osprey",
   saleshawk: "SalesHawk",
   merlin: "Merlin",
-  kiro: "Kiro",
-  warbler: "Kiro",
+  kiro: "Warbler",
+  warbler: "Warbler",
   owl: "Owl",
   mockingjay: "MockingJay",
 };
 
-const MEETING_ROSTER = ["Wren", "SalesHawk", "Osprey", "Merlin", "Kiro", "Owl", "MockingJay"];
+const MEETING_ROSTER = ["Wren", "SalesHawk", "Osprey", "Merlin", "Warbler", "Eagle", "MockingJay"];
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
