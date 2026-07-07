@@ -20,18 +20,12 @@ function MyAgentPageInner() {
       console.error("My Agent error:", err);
       toast.error("Voice agent error");
     },
-    onMessage: (msg: {
-      type?: string;
-      user_transcription_event?: { user_transcript?: string };
-      agent_response_event?: { agent_response?: string };
-    }) => {
-      if (msg?.type === "user_transcript") {
-        const text = msg.user_transcription_event?.user_transcript;
-        if (text) setTranscript((t) => [...t, { role: "user", text, id: crypto.randomUUID() }]);
-      } else if (msg?.type === "agent_response") {
-        const text = msg.agent_response_event?.agent_response;
-        if (text) setTranscript((t) => [...t, { role: "agent", text, id: crypto.randomUUID() }]);
-      }
+    onMessage: (msg) => {
+      // The SDK delivers { message, role: "user" | "agent" } — map it straight
+      // to the transcript. (The old user_transcription_event/agent_response_event
+      // shape this handler used no longer exists, so it never populated.)
+      if (!msg?.message) return;
+      setTranscript((t) => [...t, { role: msg.role, text: msg.message, id: crypto.randomUUID() }]);
     },
   });
 
