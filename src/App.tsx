@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { ConversationProvider } from "@elevenlabs/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -57,7 +58,7 @@ const App = () => (
           <Route path="/" element={<AuthGate>{(userId: string) => <Index userId={userId} />}</AuthGate>} />
           <Route path="/dashboard/:agentId" element={<AuthGate><KiroDashboardPage /></AuthGate>} />
           <Route path="/meet" element={<MeetPage />} />
-          <Route path="/my-agent" element={<AuthGate><MyAgentPage /></AuthGate>} />
+          <Route path="/my-agent" element={<AuthGate><ConversationProvider><MyAgentPage /></ConversationProvider></AuthGate>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         <GlobalVoiceStop />
