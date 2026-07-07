@@ -100,6 +100,28 @@ export const DEFAULT_AGENTS: AgentConfig[] = [
     accentColor: "330 80% 60%",
     speakOrder: 7,
   },
+  {
+    id: "magpie",
+    name: "Magpie",
+    emoji: "🐦‍⬛",
+    role: "Finance Lead",
+    voiceId: "ErXwobaYiN019PkySvjV",
+    agentId: "magpie",
+    apiUrl: "",
+    accentColor: "45 90% 45%",
+    speakOrder: 8,
+  },
+  {
+    id: "guidebook",
+    name: "Owl",
+    emoji: "🦉",
+    role: "Intelligent Guidebooks",
+    voiceId: "ErXwobaYiN019PkySvjV",
+    agentId: "guidebook",
+    apiUrl: "",
+    accentColor: "265 60% 55%",
+    speakOrder: 9,
+  },
 ];
 
 function mergeWithDefaults(agents: AgentConfig[]): AgentConfig[] {

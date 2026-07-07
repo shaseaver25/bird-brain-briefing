@@ -17,3 +17,19 @@ verify_jwt = false
 # Wren's weekly retro (admin-invoked from the dashboard; keep JWT on)
 [functions.wren-retro]
 verify_jwt = true
+
+# SalesHawk pipeline keeper — flags aging/untouched leads (admin + daily cron)
+[functions.saleshawk-pipeline]
+verify_jwt = true
+
+# Merlin client-delivery tracker — watches signed-client check-in cadence (admin + daily cron)
+[functions.merlin-client-health]
+verify_jwt = true
+
+# Magpie finance — reads QuickBooks, caches cash/invoices/revenue (admin + weekly cron)
+[functions.magpie-weekly]
+verify_jwt = true
+
+# Owl intelligent guidebooks — researches a topic, builds a concept knowledge graph (admin-invoked)
+[functions.owl-guidebook]
+verify_jwt = true

@@ -18,6 +18,8 @@ const ROLE_WIDGETS: Record<string, React.LazyExoticComponent<React.ComponentType
   warbler: lazy(() => import('@/components/agent-dashboards/KiroWidgets')),
   owl: lazy(() => import('@/components/agent-dashboards/OwlWidgets')),
   mockingjay: lazy(() => import('@/components/agent-dashboards/MockingJayWidgets')),
+  magpie: lazy(() => import('@/components/agent-dashboards/MagpieWidgets')),
+  guidebook: lazy(() => import('@/components/agent-dashboards/OwlGuidebookWidgets')),
 };
 
 function resolveWidgetKey(agent: { name: string; role: string }): string | null {
@@ -71,11 +73,13 @@ export default function KiroDashboardPage() {
     lookupFromConfig();
   }, [agent, agentId]);
 
-  // Resolve role-specific widget set
+  // Resolve role-specific widget set. Prefer the slug (route param) so a
+  // display name like "Owl" on the guidebook agent (slug "guidebook") doesn't
+  // collide with the legislation agent's "owl" slug.
   const resolvedAgent = agent || appConfigAgent;
-  const roleKey = resolvedAgent
-    ? resolveWidgetKey(resolvedAgent)
-    : (agentId && ROLE_WIDGETS[agentId.toLowerCase()]) ? agentId.toLowerCase() : null;
+  const roleKey = (agentId && ROLE_WIDGETS[agentId.toLowerCase()])
+    ? agentId.toLowerCase()
+    : resolvedAgent ? resolveWidgetKey(resolvedAgent) : null;
   const RoleWidgets = roleKey ? ROLE_WIDGETS[roleKey] : null;
 
   // Fallback agent info from URL when Supabase doesn't have the agent

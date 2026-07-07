@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -459,6 +459,7 @@ function FollowUpQueueWidget() {
 export default function SalesHawkWidgets() {
   return (
     <div className="space-y-6">
+      <PipelineHealthWidget />
       <InboundLeadsWidget />
       <TodaysFindsWidget />
       <NetworkingWidget />
@@ -466,6 +467,92 @@ export default function SalesHawkWidgets() {
           they're wired to real CRM data. See DealValuesWidget, PipelineFunnelWidget,
           FollowUpQueueWidget above — kept in the file for future re-enablement. */}
     </div>
+  );
+}
+
+// --- Pipeline Health Widget (aging leads) ---
+
+interface AgingLead {
+  id: string;
+  name: string;
+  company: string | null;
+  email: string;
+  source: string;
+  status: string;
+  days: number;
+}
+
+function PipelineHealthWidget() {
+  const [data, setData] = useState<{ awaiting_first_contact: AgingLead[]; stale: AgingLead[]; contacted_waiting: AgingLead[] } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [running, setRunning] = useState(false);
+
+  const load = useCallback(async () => {
+    const { data: row } = await supabase
+      .from('widget_data')
+      .select('data')
+      .eq('agent_id', 'saleshawk')
+      .eq('widget_key', 'pipeline_health')
+      .maybeSingle();
+    if (row?.data) setData(row.data as any);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const runNow = async () => {
+    setRunning(true);
+    try {
+      await supabase.functions.invoke('saleshawk-pipeline');
+      setTimeout(async () => { await load(); setRunning(false); }, 4000);
+    } catch { setRunning(false); }
+  };
+
+  const section = (title: string, leads: AgingLead[], tone: string, suffix: (l: AgingLead) => string) => (
+    leads.length > 0 && (
+      <div>
+        <p className={`text-xs font-semibold mb-1.5 ${tone}`}>{title} ({leads.length})</p>
+        <div className="space-y-1.5">
+          {leads.slice(0, 6).map((l) => (
+            <div key={l.id} className="flex items-center justify-between rounded-md border border-border/60 px-3 py-1.5">
+              <span className="text-sm truncate">{l.name}{l.company ? ` · ${l.company}` : ''}</span>
+              <span className="text-xs text-muted-foreground shrink-0 ml-2">{suffix(l)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  );
+
+  const nothingFlagged = data && data.awaiting_first_contact.length === 0 && data.stale.length === 0 && data.contacted_waiting.length === 0;
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-2">
+        <div>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5 text-primary" />
+            Pipeline Health
+          </CardTitle>
+          <CardDescription>Leads going cold — follow-up discipline that keeps deals alive</CardDescription>
+        </div>
+        <Button size="sm" variant="outline" onClick={runNow} disabled={running}>
+          {running ? 'Checking…' : 'Check now'}
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
+        {!loading && !data && (
+          <p className="text-sm text-muted-foreground">No pipeline check yet — click Check now.</p>
+        )}
+        {nothingFlagged && (
+          <p className="text-sm text-muted-foreground">Nothing needs attention — every open lead is current. 🎯</p>
+        )}
+        {data && section('Untouched 10+ days', data.stale, 'text-destructive', (l) => `${l.days}d cold`)}
+        {data && section('Awaiting first contact', data.awaiting_first_contact, 'text-amber-500', (l) => `${l.days}d old`)}
+        {data && section('Contacted, waiting on you', data.contacted_waiting, 'text-muted-foreground', (l) => `${l.days}d ago`)}
+      </CardContent>
+    </Card>
   );
 }
 
