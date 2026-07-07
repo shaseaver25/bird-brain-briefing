@@ -883,6 +883,51 @@ export type Database = {
         }
         Relationships: []
       }
+      mockingjay_posts: {
+        Row: {
+          content: string
+          created_at: string
+          hashtags: string[]
+          hook: string | null
+          id: string
+          platform: string
+          posted_at: string | null
+          revise_note: string | null
+          scheduled_for: string | null
+          source: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          hashtags?: string[]
+          hook?: string | null
+          id?: string
+          platform: string
+          posted_at?: string | null
+          revise_note?: string | null
+          scheduled_for?: string | null
+          source?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          hashtags?: string[]
+          hook?: string | null
+          id?: string
+          platform?: string
+          posted_at?: string | null
+          revise_note?: string | null
+          scheduled_for?: string | null
+          source?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       owl_topics: {
         Row: {
           active: boolean
