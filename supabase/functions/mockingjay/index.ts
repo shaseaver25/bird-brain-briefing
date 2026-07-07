@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@0.32.1';
-import { corsHeaders, formatInboxForPrompt, postMessage, readInbox } from '../_shared/agent-bus.ts';
+import { corsHeaders, formatInboxForPrompt, postMessage, readHandoffs, readInbox } from '../_shared/agent-bus.ts';
 
 const AGENT_ID = 'mockingjay';
 
@@ -81,27 +81,43 @@ serve(async (req) => {
           .order('found_at', { ascending: false })
           .limit(5);
 
-        const inbox = await readInbox(supabase, AGENT_ID);
+        const inbox = await readInbox(supabase, AGENT_ID, { markRead: false });
 
-        const { data: existingPosts } = await supabase
-          .from('widget_data')
-          .select('widget_key, data')
-          .eq('agent_id', AGENT_ID)
-          .eq('widget_key', 'post_queue')
-          .single();
+        // Kiro hands off high-relevance articles as explicit post seeds.
+        const handoffs = await readHandoffs(supabase, AGENT_ID);
+        const postSeeds = handoffs.map((h) => h.payload).filter(Boolean);
+
+        // Real post history — grounds the scorecard in facts instead of guesses.
+        const { data: recentPosts } = await supabase
+          .from('mockingjay_posts')
+          .select('platform, status, posted_at, scheduled_for, created_at')
+          .order('created_at', { ascending: false })
+          .limit(60);
+        const postHistory = recentPosts ?? [];
+
+        // Posts Shannon sent back for a rewrite — regenerate these first.
+        const { data: reviseRows } = await supabase
+          .from('mockingjay_posts')
+          .select('id, platform, content, hook, revise_note')
+          .eq('status', 'revise_requested')
+          .order('updated_at', { ascending: false })
+          .limit(10);
+        const reviseRequests = reviseRows ?? [];
 
         const contextSummary = JSON.stringify({
           wren: wrenData ?? [],
           merlin_action_items: merlinData ?? [],
           kiro_intel: kiroData ?? [],
           team_messages: formatInboxForPrompt(inbox),
+          post_seeds_from_kiro: postSeeds,
+          revision_requests: reviseRequests,
           customTopic,
         });
 
         const postDraftResponse = await anthropic.messages.create({
           model: 'claude-sonnet-4-6',
           max_tokens: 2000,
-          system: 'You are MockingJay, a social media content agent. You create platform-native post drafts for LinkedIn, Instagram, and Facebook based on team activity data. Return ONLY valid JSON matching this schema exactly: { "posts": [ { "id": "string", "platform": "LinkedIn|Instagram|Facebook", "content": "string", "hashtags": ["string"], "status": "Draft|Ready|Needs Review", "hook": "string", "source": "string", "created_at": "ISO timestamp" } ] }. Create 1-2 posts per platform (3-6 total). Make each post feel native to its platform. LinkedIn = professional insight. Instagram = visual concept plus punchy caption. Facebook = conversational and community-oriented. If a customTopic is provided, prioritize it. GROUNDING: base every post only on the provided team context — never invent statistics, customer names, results, or testimonials. Set each post\'s "source" field to the specific context item it came from.',
+          system: 'You are MockingJay, a social media content agent. You create platform-native post drafts for LinkedIn, Instagram, and Facebook based on team activity data. Return ONLY valid JSON matching this schema exactly: { "posts": [ { "platform": "LinkedIn|Instagram|Facebook", "content": "string", "hashtags": ["string"], "hook": "string", "source": "string" } ] }. Create 1-2 posts per platform (3-6 total). Make each post feel native to its platform. LinkedIn = professional insight. Instagram = visual concept plus punchy caption. Facebook = conversational and community-oriented. PRIORITIES: (1) address every item in "revision_requests" by producing an improved version that follows its revise_note; (2) turn each "post_seeds_from_kiro" article into a post that cites it; (3) if a customTopic is provided, prioritize it. GROUNDING: base every post only on the provided team context — never invent statistics, customer names, results, or testimonials. Set each post\'s "source" field to the specific context item it came from (e.g. the Kiro article title, or the team report).',
           messages: [
             {
               role: 'user',
@@ -116,14 +132,34 @@ serve(async (req) => {
         if (parsedPosts) postQueue = parsedPosts;
         else console.error('MockingJay: failed to parse posts JSON. Raw:', rawPostText.slice(0, 500));
 
+        // Compute REAL per-platform stats from the posts table — no guessing.
+        const platformStats: Record<string, { posted: number; approved: number; draft: number; daysSinceLastPost: number | null }> = {};
+        for (const pf of ['LinkedIn', 'Instagram', 'Facebook']) {
+          const rows = postHistory.filter((p: any) => p.platform === pf);
+          const posted = rows.filter((p: any) => p.status === 'posted');
+          const lastPosted = posted
+            .map((p: any) => p.posted_at)
+            .filter(Boolean)
+            .sort()
+            .pop();
+          platformStats[pf] = {
+            posted: posted.length,
+            approved: rows.filter((p: any) => p.status === 'approved' || p.status === 'scheduled').length,
+            draft: rows.filter((p: any) => p.status === 'draft').length,
+            daysSinceLastPost: lastPosted
+              ? Math.floor((Date.now() - new Date(lastPosted).getTime()) / 86400000)
+              : null,
+          };
+        }
+
         const scorecardResponse = await anthropic.messages.create({
           model: 'claude-sonnet-4-6',
           max_tokens: 800,
-          system: 'You are MockingJay. Based on post queue data, generate a platform health scorecard. Return ONLY valid JSON: { "scorecard": { "LinkedIn": { "status": "Active|Quiet|Silent", "daysSincePost": 0, "recommendation": "string", "score": 0 }, "Instagram": { "status": "Active|Quiet|Silent", "daysSincePost": 0, "recommendation": "string", "score": 0 }, "Facebook": { "status": "Active|Quiet|Silent", "daysSincePost": 0, "recommendation": "string", "score": 0 } }, "overall_health": "string", "priority_action": "string" }',
+          system: 'You are MockingJay. Build a platform health scorecard from REAL post-history stats. Return ONLY valid JSON: { "scorecard": { "LinkedIn": { "status": "Active|Quiet|Silent", "daysSincePost": 0, "recommendation": "string", "score": 0 }, "Instagram": {...}, "Facebook": {...} }, "overall_health": "string", "priority_action": "string" }. Rules: use the provided daysSinceLastPost verbatim for daysSincePost (if it is null, the platform has never posted — set status "Silent" and say so). Base "status" and "score" (0-100) on real activity: recently posted = Active/high, long gap = Silent/low. Never invent engagement or follower numbers — you only know posting cadence, not reach.',
           messages: [
             {
               role: 'user',
-              content: 'Post queue context: ' + JSON.stringify(postQueue) + '. Existing posts: ' + JSON.stringify(existingPosts?.data ?? {}) + '. Generate a platform health scorecard based ONLY on this data. There is no live platform analytics feed, so daysSincePost and scores are estimates — keep recommendations phrased as estimates, and never present invented engagement numbers as fact.',
+              content: 'Real per-platform stats (from the posts table): ' + JSON.stringify(platformStats) + '. New drafts generated this run: ' + JSON.stringify((postQueue as any).posts?.map((p: any) => p.platform) ?? []) + '. Build the scorecard from these facts only.',
             },
           ],
         });
@@ -155,6 +191,31 @@ serve(async (req) => {
         const now = new Date().toISOString();
         const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString();
 
+        // Persist new drafts to the posts table so the approval loop is real.
+        const draftRows = ((postQueue as any).posts ?? [])
+          .filter((p: any) => p?.platform && p?.content)
+          .map((p: any) => ({
+            platform: p.platform,
+            content: p.content,
+            hook: p.hook ?? null,
+            hashtags: Array.isArray(p.hashtags) ? p.hashtags.map((t: string) => String(t).replace(/^#/, '')) : [],
+            source: p.source ?? null,
+            status: 'draft',
+          }));
+        if (draftRows.length > 0) {
+          const { error: insErr } = await supabase.from('mockingjay_posts').insert(draftRows);
+          if (insErr) console.error('MockingJay: failed to persist drafts:', insErr.message);
+        }
+
+        // Mark any revision requests handled — they were fed into this run's drafts.
+        if (reviseRequests.length > 0) {
+          await supabase
+            .from('mockingjay_posts')
+            .update({ status: 'discarded', updated_at: now })
+            .in('id', reviseRequests.map((r: any) => r.id));
+        }
+
+        // Keep the widget_data snapshot too (for the meeting-brief consumers).
         await supabase.from('widget_data').upsert(
           { agent_id: AGENT_ID, widget_key: 'post_queue', data: { ...postQueue, generated_at: now }, expires_at: expiresAt, updated_at: now },
           { onConflict: 'agent_id,widget_key' }

@@ -674,12 +674,110 @@ function MorningBriefingWidget() {
   );
 }
 
+// --- Weekly Retro Widget ---
+
+function WeeklyRetroWidget() {
+  const [retro, setRetro] = useState<string | null>(null);
+  const [meta, setMeta] = useState<{ leadCount?: number; bySource?: Record<string, number>; compiledAt?: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [compiling, setCompiling] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  async function loadCached() {
+    const { data } = await supabase
+      .from("widget_data")
+      .select("data, updated_at")
+      .eq("agent_id", "wren")
+      .eq("widget_key", "weekly_retro")
+      .maybeSingle();
+    const d = data?.data as { retro?: string; lead_count?: number; by_source?: Record<string, number> } | undefined;
+    if (d?.retro) {
+      setRetro(d.retro);
+      setMeta({ leadCount: d.lead_count, bySource: d.by_source, compiledAt: data?.updated_at ?? undefined });
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    loadCached();
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
+
+  async function compile() {
+    setCompiling(true);
+    if (pollRef.current) clearInterval(pollRef.current);
+    const prev = meta?.compiledAt ?? null;
+    try {
+      await supabase.functions.invoke("wren-retro");
+      let attempts = 0;
+      pollRef.current = setInterval(async () => {
+        attempts++;
+        const { data } = await supabase
+          .from("widget_data")
+          .select("data, updated_at")
+          .eq("agent_id", "wren")
+          .eq("widget_key", "weekly_retro")
+          .maybeSingle();
+        if ((data?.updated_at && data.updated_at !== prev) || attempts > 40) {
+          if (pollRef.current) clearInterval(pollRef.current);
+          await loadCached();
+          setCompiling(false);
+        }
+      }, 3000);
+    } catch (err) {
+      console.error("wren-retro failed:", err);
+      setCompiling(false);
+    }
+  }
+
+  return (
+    <Card className="border-emerald-500/30">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-emerald-500" />
+            Weekly Retro
+          </CardTitle>
+          <button
+            onClick={compile}
+            disabled={compiling}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 transition-colors disabled:opacity-40"
+          >
+            <RefreshCw className={`h-3 w-3 ${compiling ? "animate-spin" : ""}`} />
+            {compiling ? "Compiling…" : "Run retro"}
+          </button>
+        </div>
+        <CardDescription>
+          {compiling ? "Wren is reviewing the week's agent activity and lead sources…"
+            : retro ? `${meta?.leadCount ?? 0} leads this week${meta?.bySource ? " · " + Object.entries(meta.bySource).map(([s, n]) => `${n} ${s.replace("_", " ")}`).join(", ") : ""}`
+            : "What closed, what stalled, where leads came from — click Run retro"}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {loading || compiling ? (
+          <div className="space-y-2">
+            {[1, 2, 3, 4].map((i) => <div key={i} className="h-4 rounded bg-muted animate-pulse" style={{ width: `${92 - i * 8}%` }} />)}
+          </div>
+        ) : retro ? (
+          <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{retro}</p>
+        ) : (
+          <div className="text-center py-6">
+            <p className="text-sm text-muted-foreground">No retro yet.</p>
+            <p className="text-xs text-muted-foreground mt-1">Best run Friday afternoon, or any time to see the week so far.</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function WrenWidgets() {
   const { calendarItems, emailItems, loading, refreshing, lastUpdated, refresh } = useLiveWrenData();
 
   return (
     <div className="space-y-6">
       <MorningBriefingWidget />
+      <WeeklyRetroWidget />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <CalendarOverviewWidget
           items={calendarItems}

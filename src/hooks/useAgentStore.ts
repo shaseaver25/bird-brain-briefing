@@ -80,9 +80,9 @@ export const DEFAULT_AGENTS: AgentConfig[] = [
   },
   {
     id: "owl",
-    name: "Owl",
-    emoji: "🦉",
-    role: "Intelligent Textbook Agent",
+    name: "Eagle",
+    emoji: "🦅",
+    role: "Legal Eagle",
     voiceId: "ErXwobaYiN019PkySvjV",
     agentId: "owl",
     apiUrl: "",
@@ -111,6 +111,12 @@ function mergeWithDefaults(agents: AgentConfig[]): AgentConfig[] {
     if (a.id === "kiro" && a.name === "Warbler") {
       const fresh = DEFAULT_AGENTS.find((d) => d.id === "kiro")!;
       a = { ...a, name: fresh.name, emoji: fresh.emoji, role: fresh.role, apiUrl: fresh.apiUrl };
+    }
+    // The legislation agent is now "Eagle / Legal Eagle" (was Owl / textbook
+    // agent). Slug stays "owl" so the edge function and data keep working.
+    if (a.id === "owl" && (a.name === "Owl" || a.role === "Intelligent Textbook Agent" || a.role === "Legislative Tracker")) {
+      const fresh = DEFAULT_AGENTS.find((d) => d.id === "owl")!;
+      a = { ...a, name: fresh.name, emoji: fresh.emoji, role: fresh.role };
     }
     return { ...a, speakOrder: a.speakOrder ?? i + 1 };
   });

@@ -58,6 +58,7 @@ STRICT RULES:
 - action "propose": reason and durationMin are known and you want to show open times. Do NOT list times in your reply — the system fetches real availability and shows it; your reply should just lead into it (e.g. "Here's what Shannon has open...").
 - action "book": the visitor accepted a specific offered time AND you have name + email. chosenStart must be exactly one of the offered slot start times.
 - NEVER invent, guess, or state specific dates/times yourself — only reference times the system has actually offered in this conversation.
+- If a booking attempt failed earlier in the conversation, do NOT refuse subsequent attempts yourself — always emit action "book" for a time the system offered and let the system verify it. Only the system decides whether a slot is bookable.
 - Never promise anything on Shannon's behalf beyond the meeting itself. If asked things outside scheduling, answer in one friendly sentence and steer back to booking.
 - Keep replies to 1-3 short sentences, warm and human, no markdown.`;
 
@@ -244,10 +245,17 @@ Deno.serve(async (req) => {
         });
       }
       if (!createRes.ok) {
-        console.error("booking-agent create failed:", created);
+        // Surface the real failure in logs so it's diagnosable, and give the
+        // visitor fresh clickable options instead of a dead-end message.
+        console.error(`booking-agent create failed (${createRes.status}):`, JSON.stringify(created));
+        const stillOpen = await getOpenSlots(durationMin);
+        const offered = pickSpreadSlots(stillOpen, decision.preference, 4);
         return json({
-          reply: "That slot was taken a moment ago — let me pull up fresh times.",
-          action: "chat",
+          reply: "I hit a snag booking that time. Here are the current open times — pick one and I'll try again.",
+          action: "propose",
+          durationMin,
+          reason: decision.reason ?? null,
+          slots: offered.map((s) => ({ ...s, label: slotLabel(s.start) })),
         });
       }
 

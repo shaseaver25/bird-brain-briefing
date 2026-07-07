@@ -15,11 +15,36 @@ const platformColors: Record<string, string> = {
 };
 
 const statusColors: Record<string, string> = {
-  Draft: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-  Ready: 'bg-green-100 text-green-800 border-green-300',
-  'Needs Review': 'bg-orange-100 text-orange-800 border-orange-300',
-  Posted: 'bg-gray-100 text-gray-700 border-gray-300',
+  draft: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+  approved: 'bg-green-100 text-green-800 border-green-300',
+  revise_requested: 'bg-orange-100 text-orange-800 border-orange-300',
+  scheduled: 'bg-blue-100 text-blue-800 border-blue-300',
+  posted: 'bg-gray-100 text-gray-700 border-gray-300',
+  discarded: 'bg-gray-100 text-gray-400 border-gray-200',
 };
+
+const statusLabels: Record<string, string> = {
+  draft: 'Draft',
+  approved: 'Approved',
+  revise_requested: 'Revision requested',
+  scheduled: 'Scheduled',
+  posted: 'Posted',
+  discarded: 'Discarded',
+};
+
+interface PostRow {
+  id: string;
+  platform: string;
+  content: string;
+  hook: string | null;
+  hashtags: string[];
+  source: string | null;
+  status: string;
+  revise_note: string | null;
+  scheduled_for: string | null;
+  posted_at: string | null;
+  created_at: string;
+}
 
 const healthColors: Record<string, string> = {
   Active: 'bg-green-100 text-green-800',
@@ -34,7 +59,7 @@ const priorityColors: Record<string, string> = {
 };
 
 export default function MockingJayWidgets() {
-  const [postQueue, setPostQueue] = useState<any[]>([]);
+  const [postQueue, setPostQueue] = useState<PostRow[]>([]);
   const [scorecard, setScorecard] = useState<any>({});
   const [calendar, setCalendar] = useState<any[]>([]);
   const [brief, setBrief] = useState<{ brief: string[]; one_liner: string }>({ brief: [], one_liner: '' });
@@ -44,10 +69,21 @@ export default function MockingJayWidgets() {
   const [topic, setTopic] = useState('');
   const [activeTab, setActiveTab] = useState('LinkedIn');
   const [expandedPost, setExpandedPost] = useState<string | null>(null);
+  const [reviseFor, setReviseFor] = useState<string | null>(null);
+  const [reviseNote, setReviseNote] = useState('');
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
+      // Real post drafts + their approval status.
+      const { data: posts } = await (supabase
+        .from('mockingjay_posts' as never) as ReturnType<typeof supabase.from>)
+        .select('*')
+        .neq('status', 'discarded')
+        .order('created_at', { ascending: false })
+        .limit(60);
+      setPostQueue((posts ?? []) as unknown as PostRow[]);
+
       const { data } = await supabase
         .from('widget_data')
         .select('widget_key, data, updated_at')
@@ -57,7 +93,6 @@ export default function MockingJayWidgets() {
         for (const row of data) {
           const d: any = row.data;
           if (row.widget_key === 'post_queue') {
-            setPostQueue(d?.posts ?? []);
             setLastUpdated(row.updated_at);
           }
           if (row.widget_key === 'platform_scorecard') {
@@ -77,6 +112,23 @@ export default function MockingJayWidgets() {
       setLoading(false);
     }
   }, []);
+
+  const updatePost = useCallback(async (id: string, patch: Record<string, unknown>) => {
+    await (supabase.from('mockingjay_posts' as never) as ReturnType<typeof supabase.from>)
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq('id', id);
+    await fetchData();
+  }, [fetchData]);
+
+  const approve = (id: string) => updatePost(id, { status: 'approved' });
+  const markScheduled = (id: string) => updatePost(id, { status: 'scheduled', scheduled_for: new Date().toISOString() });
+  const markPosted = (id: string) => updatePost(id, { status: 'posted', posted_at: new Date().toISOString() });
+  const discard = (id: string) => updatePost(id, { status: 'discarded' });
+  const submitRevise = async (id: string) => {
+    await updatePost(id, { status: 'revise_requested', revise_note: reviseNote.trim() || null });
+    setReviseFor(null);
+    setReviseNote('');
+  };
 
   useEffect(() => {
     fetchData();
@@ -235,7 +287,7 @@ export default function MockingJayWidgets() {
             <CardHeader>
               <CardTitle className="text-base">Post Queue</CardTitle>
               <CardDescription>
-                {postQueue.length} draft{postQueue.length !== 1 ? 's' : ''} across all platforms
+                {postQueue.length} post{postQueue.length !== 1 ? 's' : ''} · approve, request a revision, or mark scheduled/posted
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -260,17 +312,16 @@ export default function MockingJayWidgets() {
               ) : (
                 <div className="space-y-3">
                   {filteredPosts.map((post) => (
-                    <div
-                      key={post.id}
-                      className="border rounded-lg p-4 space-y-2 cursor-pointer hover:shadow-sm transition-shadow"
-                      onClick={() => setExpandedPost(expandedPost === post.id ? null : post.id)}
-                    >
-                      <div className="flex items-start justify-between gap-2">
+                    <div key={post.id} className="border rounded-lg p-4 space-y-2">
+                      <div
+                        className="flex items-start justify-between gap-2 cursor-pointer"
+                        onClick={() => setExpandedPost(expandedPost === post.id ? null : post.id)}
+                      >
                         <p className="text-sm font-semibold leading-snug flex-1">
                           {post.hook || (post.content ?? '').slice(0, 80) + '...'}
                         </p>
                         <Badge className={'text-xs shrink-0 border ' + (statusColors[post.status] || 'bg-gray-100 text-gray-600')}>
-                          {post.status}
+                          {statusLabels[post.status] ?? post.status}
                         </Badge>
                       </div>
                       {expandedPost === post.id && (
@@ -286,7 +337,45 @@ export default function MockingJayWidgets() {
                           {post.source && (
                             <p className="text-xs text-muted-foreground border-t pt-2">Source: {post.source}</p>
                           )}
+                          {post.revise_note && (
+                            <p className="text-xs text-orange-600">Revision note: {post.revise_note}</p>
+                          )}
                         </>
+                      )}
+
+                      {/* Approval actions — the real loop */}
+                      {reviseFor === post.id ? (
+                        <div className="space-y-2 pt-1">
+                          <Textarea
+                            placeholder="What should MockingJay change? (fed back on the next run)"
+                            value={reviseNote}
+                            onChange={(e) => setReviseNote(e.target.value)}
+                            rows={2}
+                            className="text-sm resize-none"
+                          />
+                          <div className="flex gap-2">
+                            <Button size="sm" onClick={() => submitRevise(post.id)}>Send back</Button>
+                            <Button size="sm" variant="ghost" onClick={() => { setReviseFor(null); setReviseNote(''); }}>Cancel</Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {(post.status === 'draft' || post.status === 'revise_requested') && (
+                            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => approve(post.id)}>Approve</Button>
+                          )}
+                          {post.status === 'draft' && (
+                            <Button size="sm" variant="outline" onClick={() => setReviseFor(post.id)}>Request revision</Button>
+                          )}
+                          {post.status === 'approved' && (
+                            <Button size="sm" variant="outline" onClick={() => markScheduled(post.id)}>Mark scheduled</Button>
+                          )}
+                          {(post.status === 'approved' || post.status === 'scheduled') && (
+                            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => markPosted(post.id)}>Mark posted</Button>
+                          )}
+                          {post.status !== 'posted' && (
+                            <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => discard(post.id)}>Discard</Button>
+                          )}
+                        </div>
                       )}
                     </div>
                   ))}

@@ -2,7 +2,7 @@
 // the team on the message bus. Used by booking-create (demo bookings) and
 // inbound-intake (website form fills / manually logged contacts).
 
-import { postMessage, serviceClient } from "./agent-bus.ts";
+import { handoff, postMessage, serviceClient } from "./agent-bus.ts";
 
 export const INBOUND_SOURCES = [
   "booking_page",
@@ -85,6 +85,16 @@ export async function recordInboundLead(lead: InboundLead): Promise<void> {
         business: normalizeBusiness(lead.business),
         status: lead.status ?? "new",
       },
+    });
+
+    // Hand the new lead to Merlin as a follow-up — SalesHawk finds them,
+    // Merlin makes sure they don't fall through the cracks.
+    await handoff(sb, announcer, "merlin", `Follow up with ${lead.name}${lead.company ? ` at ${lead.company}` : ""}`, {
+      name: lead.name,
+      email: lead.email,
+      company: lead.company ?? null,
+      source,
+      status: lead.status ?? "new",
     });
   } catch (e) {
     console.error("inbound: intake failed:", e);
