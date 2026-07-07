@@ -7,7 +7,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import Index from "./pages/Index";
-import StaffMeetingPage from "./pages/StaffMeetingPage";
 import KiroDashboardPage from "./pages/KiroDashboardPage";
 import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
@@ -58,7 +57,6 @@ const App = () => (
         <AppNav />
         <Routes>
           <Route path="/" element={<AuthGate>{(userId: string) => <Index userId={userId} />}</AuthGate>} />
-          <Route path="/meeting" element={<AuthGate><StaffMeetingPage /></AuthGate>} />
           <Route path="/dashboard/:agentId" element={<AuthGate><KiroDashboardPage /></AuthGate>} />
           <Route path="/meet" element={<MeetPage />} />
           <Route path="/voice" element={<AuthGate><VoiceAgentPage /></AuthGate>} />
