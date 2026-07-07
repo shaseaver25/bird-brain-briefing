@@ -38,10 +38,19 @@ function AuthGate({ children }: { children: React.ReactNode | ((userId: string) 
       setUser(session?.user ?? null);
       setLoading(false);
     });
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        setUser(session?.user ?? null);
+        setLoading(false);
+      })
+      .catch((err) => {
+        // Network / stale-refresh-token failures must not leave the UI stuck
+        // on the "Loading..." splash. Fall through to the sign-in screen.
+        console.error("getSession failed:", err);
+        setUser(null);
+        setLoading(false);
+      });
     return () => subscription.unsubscribe();
   }, []);
 
