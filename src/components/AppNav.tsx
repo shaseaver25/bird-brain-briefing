@@ -5,8 +5,6 @@ import { DEFAULT_AGENTS } from "@/hooks/useAgentStore";
 
 const LINKS = [
   { to: "/", label: "Meeting Room" },
-  { to: "/panel", label: "Panel" },
-  { to: "/voice", label: "Voice" },
   { to: "/my-agent", label: "My Agent" },
   { to: "/meet", label: "Swift" },
 ];
