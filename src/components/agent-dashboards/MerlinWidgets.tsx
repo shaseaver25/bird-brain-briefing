@@ -15,7 +15,8 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { Layers } from "lucide-react";
+import { Layers, HeartPulse, Plus } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -622,6 +623,9 @@ export default function MerlinWidgets() {
         </Button>
       </div>
 
+      {/* Client-delivery health — signed clients and check-in cadence */}
+      <ClientHealthWidget />
+
       {/* Follow-ups handed to Merlin by other agents (SalesHawk/Swift) */}
       <IncomingHandoffsWidget />
 
@@ -646,6 +650,107 @@ export default function MerlinWidgets() {
       {/* Deadline timeline */}
       <TimelineWidget projects={projects} />
     </div>
+  );
+}
+
+// ── Client Health Widget ──────────────────────────────────────────────────────
+// Signed clients + check-in cadence. Overdue = days since last touch exceeds
+// the client's cadence.
+
+interface ClientRow {
+  id: string;
+  name: string;
+  company: string | null;
+  business: string;
+  signed_at: string;
+  last_touch_at: string;
+  cadence_days: number;
+  status: string;
+}
+
+function daysSince(iso: string): number {
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+}
+
+function ClientHealthWidget() {
+  const [clients, setClients] = useState<ClientRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const [company, setCompany] = useState("");
+
+  async function load() {
+    const { data } = await (supabase.from("clients" as never) as ReturnType<typeof supabase.from>)
+      .select("*")
+      .eq("status", "active")
+      .order("last_touch_at", { ascending: true })
+      .limit(50);
+    setClients((data ?? []) as unknown as ClientRow[]);
+    setLoading(false);
+  }
+  useEffect(() => { load(); }, []);
+
+  async function logTouch(id: string) {
+    await (supabase.from("clients" as never) as ReturnType<typeof supabase.from>)
+      .update({ last_touch_at: new Date().toISOString() }).eq("id", id);
+    await load();
+  }
+
+  async function addClient() {
+    if (!name.trim()) return;
+    await (supabase.from("clients" as never) as ReturnType<typeof supabase.from>)
+      .insert({ name: name.trim(), company: company.trim() || null });
+    setName(""); setCompany(""); setAdding(false);
+    await load();
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-2">
+        <div>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <HeartPulse className="h-5 w-5 text-primary" />
+            Client Health
+          </CardTitle>
+          <CardDescription>Signed clients and check-in cadence — nobody goes quiet</CardDescription>
+        </div>
+        <Button size="sm" variant="outline" onClick={() => setAdding(!adding)}>
+          <Plus className="h-3.5 w-3.5 mr-1" /> Add
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {adding && (
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Input placeholder="Client name" value={name} onChange={(e) => setName(e.target.value)} className="text-sm" />
+            <Input placeholder="Company (optional)" value={company} onChange={(e) => setCompany(e.target.value)} className="text-sm" />
+            <Button size="sm" onClick={addClient}>Save</Button>
+          </div>
+        )}
+        {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
+        {!loading && clients.length === 0 && (
+          <p className="text-sm text-muted-foreground">No active clients yet. Add one when a deal signs — Merlin will watch the check-in cadence.</p>
+        )}
+        {clients.map((c) => {
+          const since = daysSince(c.last_touch_at);
+          const overdue = since > c.cadence_days;
+          return (
+            <div key={c.id} className="flex items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2">
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate">{c.name}{c.company ? ` · ${c.company}` : ""}</p>
+                <p className={`text-xs ${overdue ? "text-destructive" : "text-muted-foreground"}`}>
+                  {since === 0 ? "touched today" : `${since}d since last touch`}
+                  {overdue ? ` · ${since - c.cadence_days}d past ${c.cadence_days}d cadence` : ` · ${c.cadence_days}d cadence`}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {overdue && <Badge variant="destructive" className="text-[10px]">Overdue</Badge>}
+                <Button size="sm" variant="ghost" onClick={() => logTouch(c.id)}>Log touch</Button>
+              </div>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
   );
 }
 
