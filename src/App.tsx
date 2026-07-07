@@ -58,7 +58,7 @@ const App = () => (
           <Route path="/" element={<AuthGate>{(userId: string) => <Index userId={userId} />}</AuthGate>} />
           <Route path="/dashboard/:agentId" element={<AuthGate><KiroDashboardPage /></AuthGate>} />
           <Route path="/meet" element={<MeetPage />} />
-          <Route path="/my-agent" element={<AuthGate><MyAgentPage /></AuthGate>} />
+          <Route path="/my-agent" element={<AuthGate><ConversationProvider><MyAgentPage /></ConversationProvider></AuthGate>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         <GlobalVoiceStop />
