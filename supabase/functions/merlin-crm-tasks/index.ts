@@ -8,8 +8,6 @@ const corsHeaders = {
 // Stone Arch CRM (Supabase) — read-only via service key
 const STONEARCH_URL = Deno.env.get("STONEARCH_CRM_URL") ?? "https://vvaqdqzpbtlfucsoiupc.supabase.co";
 const STONEARCH_KEY = Deno.env.get("STONEARCH_CRM_SERVICE_KEY")!;
-// Shannon Seaver in the Stone Arch CRM (user_profiles.id). Override via env if needed.
-const SHANNON_USER_ID = Deno.env.get("STONEARCH_SHANNON_USER_ID") ?? "db8e2218-305c-48df-951c-87a40b1c64e4";
 
 interface BoardCard {
   id: string;
@@ -68,22 +66,23 @@ Deno.serve(async (req) => {
 
     if (!STONEARCH_KEY) throw new Error("STONEARCH_CRM_SERVICE_KEY not configured");
 
-    // Pull every board card assigned to Shannon
-    const cards = (await crmFetch(
-      `board_cards?assigned_to=eq.${SHANNON_USER_ID}&select=id,board_id,column_id,headline,description,priority,due_date,completed_at,is_blocked,assigned_to,updated_at&order=due_date.asc.nullslast,updated_at.desc`,
-    )) as BoardCard[];
+    // Cards in Stone Arch are never assigned to individuals (assigned_to is null
+    // across the board), so pull every card on every active board instead.
+    const boards = await crmFetch(
+      `boards?is_archived=eq.false&select=id,name,description,theme_color,is_archived,end_date,priority`,
+    );
+    const boardIds = boards.map((b: any) => b.id);
 
-    const boardIds = [...new Set(cards.map((c) => c.board_id))];
+    const cards = boardIds.length
+      ? (await crmFetch(
+          `board_cards?board_id=in.(${boardIds.join(",")})&select=id,board_id,column_id,headline,description,priority,due_date,completed_at,is_blocked,assigned_to,updated_at&order=due_date.asc.nullslast,updated_at.desc`,
+        )) as BoardCard[]
+      : [];
+
     const columnIds = [...new Set(cards.map((c) => c.column_id).filter(Boolean) as string[])];
-
-    const [boards, columns] = await Promise.all([
-      boardIds.length
-        ? crmFetch(`boards?id=in.(${boardIds.join(",")})&select=id,name,description,theme_color,is_archived,end_date,priority`)
-        : Promise.resolve([]),
-      columnIds.length
-        ? crmFetch(`board_columns?id=in.(${columnIds.join(",")})&select=id,title,column_type,is_done_column`)
-        : Promise.resolve([]),
-    ]);
+    const columns = columnIds.length
+      ? await crmFetch(`board_columns?id=in.(${columnIds.join(",")})&select=id,title,column_type,is_done_column`)
+      : [];
 
     const boardMap = new Map<string, any>(boards.map((b: any) => [b.id, b]));
     const colMap = new Map<string, any>(columns.map((c: any) => [c.id, c]));
@@ -144,7 +143,7 @@ Deno.serve(async (req) => {
     }).sort((a, b) => (b.open - b.done) - (a.open - a.done));
 
     return new Response(
-      JSON.stringify({ user_id: SHANNON_USER_ID, total_cards: enriched.length, boards: boardSummaries, cards: enriched }),
+      JSON.stringify({ total_cards: enriched.length, boards: boardSummaries, cards: enriched }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {

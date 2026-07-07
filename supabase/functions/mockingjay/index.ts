@@ -73,6 +73,28 @@ serve(async (req) => {
           .order('created_at', { ascending: false })
           .limit(10);
 
+        // The projects the whole team is working on — MockingJay's primary story source.
+        const { data: activeProjects } = await supabase
+          .from('projects')
+          .select('name, description, status, priority, completion_pct, deadline')
+          .eq('status', 'active')
+          .order('priority', { ascending: true })
+          .limit(10);
+
+        const { data: projectTasks } = await supabase
+          .from('project_tasks')
+          .select('title, status, assignee, due_date, blocker')
+          .neq('status', 'done')
+          .order('updated_at', { ascending: false })
+          .limit(15);
+
+        // What the birds are saying to each other — recent cross-agent chatter, not just MockingJay's inbox.
+        const { data: teamChatter } = await supabase
+          .from('agent_messages')
+          .select('from_agent, to_agent, kind, subject, payload, created_at')
+          .order('created_at', { ascending: false })
+          .limit(20);
+
         const { data: kiroData } = await supabase
           .from('kiro_intel')
           .select('title, topic_label, summary, source')
@@ -105,6 +127,9 @@ serve(async (req) => {
         const reviseRequests = reviseRows ?? [];
 
         const contextSummary = JSON.stringify({
+          active_projects: activeProjects ?? [],
+          project_tasks: projectTasks ?? [],
+          team_chatter: teamChatter ?? [],
           wren: wrenData ?? [],
           merlin_action_items: merlinData ?? [],
           kiro_intel: kiroData ?? [],
@@ -114,23 +139,33 @@ serve(async (req) => {
           customTopic,
         });
 
-        const postDraftResponse = await anthropic.messages.create({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 2000,
-          system: 'You are MockingJay, a social media content agent. You create platform-native post drafts for LinkedIn, Instagram, and Facebook based on team activity data. Return ONLY valid JSON matching this schema exactly: { "posts": [ { "platform": "LinkedIn|Instagram|Facebook", "content": "string", "hashtags": ["string"], "hook": "string", "source": "string" } ] }. Create 1-2 posts per platform (3-6 total). Make each post feel native to its platform. LinkedIn = professional insight. Instagram = visual concept plus punchy caption. Facebook = conversational and community-oriented. PRIORITIES: (1) address every item in "revision_requests" by producing an improved version that follows its revise_note; (2) turn each "post_seeds_from_kiro" article into a post that cites it; (3) if a customTopic is provided, prioritize it. GROUNDING: base every post only on the provided team context — never invent statistics, customer names, results, or testimonials. Set each post\'s "source" field to the specific context item it came from (e.g. the Kiro article title, or the team report).',
-          messages: [
-            {
-              role: 'user',
-              content: 'Here is the current team context data: ' + contextSummary + '. Generate social media post drafts for LinkedIn, Instagram, and Facebook. Current date: ' + new Date().toISOString(),
-            },
-          ],
-        });
+        const postSystemPrompt = 'You are MockingJay, a social media content agent. You create platform-native post drafts for LinkedIn, Instagram, and Facebook based on team activity data. Return ONLY valid JSON matching this schema exactly: { "posts": [ { "platform": "LinkedIn|Instagram|Facebook", "content": "string", "hashtags": ["string"], "hook": "string", "source": "string" } ] }. Create 1-2 posts per platform (3-6 total). Make each post feel native to its platform. LinkedIn = professional insight. Instagram = visual concept plus punchy caption. Facebook = conversational and community-oriented. PRIORITIES: (1) address every item in "revision_requests" by producing an improved version that follows its revise_note; (2) turn each "post_seeds_from_kiro" article into a post that cites it; (3) if a customTopic is provided, prioritize it; (4) otherwise lead with "active_projects" and "team_chatter" — the projects the team is actively building are the best story material. GROUNDING: base every post only on the provided team context — never invent statistics, customer names, results, or testimonials. Set each post\'s "source" field to the specific context item it came from (e.g. the project name, Kiro article title, or team report). Never return an empty posts array when active_projects is non-empty — there is always at least a build-in-public story to tell.';
 
-        let postQueue = { posts: [] };
-        const rawPostText = postDraftResponse.content[0].type === 'text' ? postDraftResponse.content[0].text : '';
-        const parsedPosts = extractJson(rawPostText);
-        if (parsedPosts) postQueue = parsedPosts;
-        else console.error('MockingJay: failed to parse posts JSON. Raw:', rawPostText.slice(0, 500));
+        // Truncated output was silently producing zero drafts — generate with headroom and one retry.
+        let postQueue: any = { posts: [] };
+        let postGenError: string | null = null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const postDraftResponse = await anthropic.messages.create({
+            model: 'claude-sonnet-4-6',
+            max_tokens: 4000,
+            system: postSystemPrompt,
+            messages: [
+              {
+                role: 'user',
+                content: 'Here is the current team context data: ' + contextSummary + '. Generate social media post drafts for LinkedIn, Instagram, and Facebook. Current date: ' + new Date().toISOString(),
+              },
+            ],
+          });
+          const rawPostText = postDraftResponse.content[0].type === 'text' ? postDraftResponse.content[0].text : '';
+          const parsedPosts = extractJson(rawPostText);
+          if (parsedPosts?.posts?.length > 0) {
+            postQueue = parsedPosts;
+            postGenError = null;
+            break;
+          }
+          postGenError = 'stop_reason=' + postDraftResponse.stop_reason + ', parsed=' + (parsedPosts ? 'empty posts array' : 'unparseable');
+          console.error(`MockingJay: post generation attempt ${attempt + 1} produced no drafts (${postGenError}). Raw:`, rawPostText.slice(0, 500));
+        }
 
         // Compute REAL per-platform stats from the posts table — no guessing.
         const platformStats: Record<string, { posted: number; approved: number; draft: number; daysSinceLastPost: number | null }> = {};
@@ -172,7 +207,7 @@ serve(async (req) => {
 
         const calendarResponse = await anthropic.messages.create({
           model: 'claude-sonnet-4-6',
-          max_tokens: 800,
+          max_tokens: 1600,
           system: 'You are MockingJay. Generate a 7-day content calendar recommendation. Return ONLY valid JSON: { "calendar": [ { "day": "string", "date": "ISO date string", "platform": "LinkedIn|Instagram|Facebook|Rest", "content_type": "string", "suggested_topic": "string", "priority": "High|Medium|Low" } ] }. Fill all 7 days.',
           messages: [
             {
@@ -216,8 +251,9 @@ serve(async (req) => {
         }
 
         // Keep the widget_data snapshot too (for the meeting-brief consumers).
+        // error surfaces in the dashboard — a failed run must not look like a quiet success.
         await supabase.from('widget_data').upsert(
-          { agent_id: AGENT_ID, widget_key: 'post_queue', data: { ...postQueue, generated_at: now }, expires_at: expiresAt, updated_at: now },
+          { agent_id: AGENT_ID, widget_key: 'post_queue', data: { ...postQueue, error: postGenError, generated_at: now }, expires_at: expiresAt, updated_at: now },
           { onConflict: 'agent_id,widget_key' }
         );
 
@@ -249,7 +285,10 @@ serve(async (req) => {
         if (parsedBrief) brief = parsedBrief;
         else {
           console.error('MockingJay: failed to parse brief JSON. Raw:', rawBriefText.slice(0, 500));
-          brief = { brief: ['MockingJay ran. Check widgets for details.'], one_liner: 'Content drafted. Awaiting your review.' };
+          const draftCount = postQueue.posts?.length ?? 0;
+          brief = draftCount > 0
+            ? { brief: [`${draftCount} drafts ready in the post queue.`], one_liner: 'Content drafted. Awaiting your review.' }
+            : { brief: ['Run produced no drafts — check edge function logs.'], one_liner: 'Run completed with no drafts. Something went wrong.' };
         }
 
         await supabase.from('widget_data').upsert(

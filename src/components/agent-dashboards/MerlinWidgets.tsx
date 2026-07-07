@@ -460,7 +460,7 @@ function ProjectBoardWidget({
           <div className="pt-3 mt-3 border-t border-border space-y-2">
             <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
               <Layers className="h-3 w-3" />
-              Stone Arch CRM — assigned to you
+              Stone Arch CRM — open cards
             </p>
             {crmBoards.map((b) => {
               const isOpen = expanded.has(b.board_id);
@@ -531,7 +531,7 @@ function ProjectBoardWidget({
           </div>
         )}
         {crmBoards && crmBoards.length === 0 && !crmError && !crmLoading && (
-          <p className="text-xs text-muted-foreground pt-2">No Stone Arch CRM cards assigned to you right now.</p>
+          <p className="text-xs text-muted-foreground pt-2">No open Stone Arch CRM cards right now.</p>
         )}
       </CardContent>
     </Card>

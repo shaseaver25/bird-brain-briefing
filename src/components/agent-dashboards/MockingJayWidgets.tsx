@@ -87,6 +87,7 @@ export default function MockingJayWidgets() {
   const [brief, setBrief] = useState<{ brief: string[]; one_liner: string }>({ brief: [], one_liner: '' });
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [topic, setTopic] = useState('');
   const [activeTab, setActiveTab] = useState('LinkedIn');
@@ -115,6 +116,7 @@ export default function MockingJayWidgets() {
         for (const row of data) {
           if (row.widget_key === 'post_queue') {
             setLastUpdated(row.updated_at);
+            setRunError((row.data as { error?: string } | null)?.error ?? null);
           }
           if (row.widget_key === 'platform_scorecard') {
             setScorecard((row.data as Scorecard) ?? {});
@@ -229,6 +231,15 @@ export default function MockingJayWidgets() {
         <div className="text-center text-muted-foreground py-12">Loading MockingJay data...</div>
       ) : (
         <>
+          {runError && (
+            <Card className="border-red-300 bg-red-50">
+              <CardContent className="py-3">
+                <p className="text-sm text-red-700">
+                  Last run failed to generate drafts ({runError}). Try Run Now again — if it keeps failing, check the mockingjay edge function logs.
+                </p>
+              </CardContent>
+            </Card>
+          )}
           {brief.one_liner && (
             <Card className="border-pink-200 bg-pink-50">
               <CardHeader className="pb-2">
@@ -287,7 +298,11 @@ export default function MockingJayWidgets() {
                             <span className="text-xs font-semibold text-gray-600">{health.score}</span>
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            {health.daysSincePost === 0 ? 'Posted today' : (health.daysSincePost + 'd since last post')}
+                            {health.daysSincePost === 0
+                              ? 'Posted today'
+                              : health.daysSincePost == null
+                                ? 'No posts yet'
+                                : health.daysSincePost + 'd since last post'}
                           </p>
                           <p className="text-xs text-gray-600">{health.recommendation}</p>
                         </>
