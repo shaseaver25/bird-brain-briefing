@@ -48,13 +48,14 @@ export function useSpeechRecognition() {
       // We only needed permission — release the stream immediately so the
       // SpeechRecognition API can take over the mic.
       stream.getTracks().forEach((t) => t.stop());
-    } catch (err: any) {
+    } catch (err) {
+      const name = err instanceof DOMException ? err.name : "";
       let msg = "Microphone access failed.";
-      if (err?.name === "NotAllowedError") {
+      if (name === "NotAllowedError") {
         msg = "Microphone permission denied. Allow mic access in your browser settings and reload.";
-      } else if (err?.name === "NotFoundError") {
+      } else if (name === "NotFoundError") {
         msg = "No microphone found. Plug one in and try again.";
-      } else if (err?.name === "NotReadableError") {
+      } else if (name === "NotReadableError") {
         msg = "Microphone is in use by another app. Close it and retry.";
       }
       setError(msg);
@@ -79,7 +80,7 @@ export function useSpeechRecognition() {
       setIsListening(false);
     };
 
-    recognition.onerror = (event: any) => {
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       const errType = event?.error || "unknown";
       let msg = `Speech recognition error: ${errType}`;
       if (errType === "not-allowed" || errType === "service-not-allowed") {
@@ -109,12 +110,12 @@ export function useSpeechRecognition() {
       toast({ variant: "destructive", title: "Mic error", description: msg });
       setIsListening(false);
     }
-  }, []);
+  }, [setError, setIsListening, setTranscript]);
 
   const stopListening = useCallback(() => {
     recognitionRef.current?.stop();
     setIsListening(false);
-  }, []);
+  }, [setIsListening]);
 
   return {
     isListening: state.isListening,

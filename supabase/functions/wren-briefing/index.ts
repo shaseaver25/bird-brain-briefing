@@ -205,7 +205,7 @@ INSTRUCTIONS:
 Deno.serve((req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  // @ts-ignore
+  // @ts-expect-error EdgeRuntime is provided by the Supabase edge runtime
   EdgeRuntime.waitUntil(
     compileBriefing().catch((err) => console.error("wren-briefing error:", err))
   );

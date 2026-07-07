@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useConversation } from "@elevenlabs/react";
+import { useConversation, ConversationProvider } from "@elevenlabs/react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -7,7 +7,7 @@ import { Mic, MicOff, Loader2 } from "lucide-react";
 
 const AGENT_ID = "agent_3801kphssj98ed1s2t6asg5z3ymn";
 
-export default function MyAgentPage() {
+function MyAgentPageInner() {
   const [isStarting, setIsStarting] = useState(false);
   const [transcript, setTranscript] = useState<
     { role: "user" | "agent"; text: string; id: string }[]
@@ -20,7 +20,11 @@ export default function MyAgentPage() {
       console.error("My Agent error:", err);
       toast.error("Voice agent error");
     },
-    onMessage: (msg: any) => {
+    onMessage: (msg: {
+      type?: string;
+      user_transcription_event?: { user_transcript?: string };
+      agent_response_event?: { agent_response?: string };
+    }) => {
       if (msg?.type === "user_transcript") {
         const text = msg.user_transcription_event?.user_transcript;
         if (text) setTranscript((t) => [...t, { role: "user", text, id: crypto.randomUUID() }]);
@@ -108,5 +112,16 @@ export default function MyAgentPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+// The voice hook (useConversation) must run inside ConversationProvider. Wrapping
+// it here — rather than in App.tsx — keeps the ElevenLabs/livekit stack in this
+// lazily-loaded route chunk instead of the initial bundle.
+export default function MyAgentPage() {
+  return (
+    <ConversationProvider>
+      <MyAgentPageInner />
+    </ConversationProvider>
   );
 }

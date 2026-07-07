@@ -46,6 +46,28 @@ interface PostRow {
   created_at: string;
 }
 
+// Shapes of the widget_data JSON MockingJay writes (loose — fields are optional
+// because a fresh account may not have every metric yet).
+interface PlatformHealth {
+  status?: string;
+  score?: number;
+  daysSincePost?: number;
+  recommendation?: string;
+}
+interface Scorecard {
+  scorecard?: Record<string, PlatformHealth>;
+  priority_action?: string;
+  overall_health?: string;
+}
+interface CalendarDay {
+  day?: string;
+  date?: string;
+  platform?: string;
+  content_type?: string;
+  suggested_topic?: string;
+  priority?: string;
+}
+
 const healthColors: Record<string, string> = {
   Active: 'bg-green-100 text-green-800',
   Quiet: 'bg-yellow-100 text-yellow-800',
@@ -60,8 +82,8 @@ const priorityColors: Record<string, string> = {
 
 export default function MockingJayWidgets() {
   const [postQueue, setPostQueue] = useState<PostRow[]>([]);
-  const [scorecard, setScorecard] = useState<any>({});
-  const [calendar, setCalendar] = useState<any[]>([]);
+  const [scorecard, setScorecard] = useState<Scorecard>({});
+  const [calendar, setCalendar] = useState<CalendarDay[]>([]);
   const [brief, setBrief] = useState<{ brief: string[]; one_liner: string }>({ brief: [], one_liner: '' });
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
@@ -91,18 +113,17 @@ export default function MockingJayWidgets() {
 
       if (data) {
         for (const row of data) {
-          const d: any = row.data;
           if (row.widget_key === 'post_queue') {
             setLastUpdated(row.updated_at);
           }
           if (row.widget_key === 'platform_scorecard') {
-            setScorecard(d ?? {});
+            setScorecard((row.data as Scorecard) ?? {});
           }
           if (row.widget_key === 'content_calendar') {
-            setCalendar(d?.calendar ?? []);
+            setCalendar((row.data as { calendar?: CalendarDay[] })?.calendar ?? []);
           }
           if (row.widget_key === 'meeting_brief') {
-            setBrief(d ?? { brief: [], one_liner: '' });
+            setBrief((row.data as { brief: string[]; one_liner: string }) ?? { brief: [], one_liner: '' });
           }
         }
       }
@@ -173,7 +194,7 @@ export default function MockingJayWidgets() {
 
   const platformList = ['LinkedIn', 'Instagram', 'Facebook'];
   const filteredPosts = postQueue.filter((p) => p.platform === activeTab);
-  const scorecardData = scorecard.scorecard ?? scorecard;
+  const scorecardData = (scorecard.scorecard ?? scorecard) as unknown as Record<string, PlatformHealth>;
 
   return (
     <div className="space-y-6">

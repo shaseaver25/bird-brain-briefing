@@ -1,3 +1,4 @@
+import type { ComponentProps } from 'react';
 import type { WidgetType } from '@/types/kiro';
 import { KpiCard, LineChart, AlertPanel, ActivityFeed, StatusIndicator, TextBlock, QuickActions } from './widgets';
 
@@ -14,15 +15,16 @@ function keyToLabel(key: string): string {
 }
 
 function WidgetContent({ type, data, widgetKey }: Pick<WidgetFactoryProps, 'type' | 'data' | 'widgetKey'>) {
-  const d = data as any;
+  // `data` arrives as unknown widget_data JSON; cast to each widget's own prop
+  // type at the point of dispatch so every branch stays type-checked.
   switch (type) {
-    case 'kpi_card':        return <KpiCard data={d} label={keyToLabel(widgetKey)} />;
-    case 'line_chart':      return <LineChart data={d} />;
-    case 'alert_panel':     return <AlertPanel data={d} />;
-    case 'activity_feed':   return <ActivityFeed data={d} />;
-    case 'status_indicator': return <StatusIndicator data={d} />;
-    case 'text_block':      return <TextBlock data={d} />;
-    case 'quick_actions':   return <QuickActions data={d} />;
+    case 'kpi_card':        return <KpiCard data={data as ComponentProps<typeof KpiCard>['data']} label={keyToLabel(widgetKey)} />;
+    case 'line_chart':      return <LineChart data={data as ComponentProps<typeof LineChart>['data']} />;
+    case 'alert_panel':     return <AlertPanel data={data as ComponentProps<typeof AlertPanel>['data']} />;
+    case 'activity_feed':   return <ActivityFeed data={data as ComponentProps<typeof ActivityFeed>['data']} />;
+    case 'status_indicator': return <StatusIndicator data={data as ComponentProps<typeof StatusIndicator>['data']} />;
+    case 'text_block':      return <TextBlock data={data as ComponentProps<typeof TextBlock>['data']} />;
+    case 'quick_actions':   return <QuickActions data={data as ComponentProps<typeof QuickActions>['data']} />;
     default:
       return (
         <div className="p-4 text-sm text-muted-foreground">

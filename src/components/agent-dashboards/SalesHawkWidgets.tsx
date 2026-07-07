@@ -5,6 +5,7 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { DollarSign, TrendingUp, Users, Clock, AlertCircle, Target, Zap, RefreshCw, Linkedin, Mail, Copy, Check, Send, ChevronDown, ChevronUp, Network, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/lib/untyped-db";
 
 // --- Types ---
 
@@ -482,8 +483,14 @@ interface AgingLead {
   days: number;
 }
 
+interface PipelineHealth {
+  awaiting_first_contact: AgingLead[];
+  stale: AgingLead[];
+  contacted_waiting: AgingLead[];
+}
+
 function PipelineHealthWidget() {
-  const [data, setData] = useState<{ awaiting_first_contact: AgingLead[]; stale: AgingLead[]; contacted_waiting: AgingLead[] } | null>(null);
+  const [data, setData] = useState<PipelineHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
 
@@ -494,7 +501,7 @@ function PipelineHealthWidget() {
       .eq('agent_id', 'saleshawk')
       .eq('widget_key', 'pipeline_health')
       .maybeSingle();
-    if (row?.data) setData(row.data as any);
+    if (row?.data) setData(row.data as unknown as PipelineHealth);
     setLoading(false);
   }, []);
 
@@ -691,11 +698,10 @@ function NetworkingWidget() {
   const [scanMsg, setScanMsg] = useState<string | null>(null);
 
   async function load() {
-    const { data } = await (supabase
-      .from("saleshawk_networking_queue" as any)
+    const { data } = await db("saleshawk_networking_queue")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(50) as any);
+      .limit(50);
     setItems((data ?? []) as QueueRow[]);
     setLoading(false);
   }

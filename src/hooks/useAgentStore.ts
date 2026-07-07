@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/lib/untyped-db";
 
 export interface AgentConfig {
   id: string;
@@ -153,7 +154,7 @@ function loadLocalState(): StoreState {
       const agents = mergeWithDefaults(parsed.agents || DEFAULT_AGENTS);
       return { agents, apiKey: parsed.apiKey || "", anthropicKey: parsed.anthropicKey || "", useMcpBackend: parsed.useMcpBackend ?? false };
     }
-  } catch {}
+  } catch { /* corrupt or unavailable localStorage — fall back to defaults */ }
   return { agents: DEFAULT_AGENTS, apiKey: "", anthropicKey: "", useMcpBackend: false };
 }
 
@@ -173,7 +174,7 @@ async function loadFromCloud(userId: string): Promise<StoreState | null> {
 
     const agents = mergeWithDefaults(data.agents as unknown as AgentConfig[]);
 
-    return { agents, apiKey: (data.api_key as string) || "", anthropicKey: (data.anthropic_key as string) || "", useMcpBackend: (data as any).use_mcp_backend ?? false };
+    return { agents, apiKey: (data.api_key as string) || "", anthropicKey: (data.anthropic_key as string) || "", useMcpBackend: (data as { use_mcp_backend?: boolean }).use_mcp_backend ?? false };
   } catch {
     return null;
   }
@@ -181,7 +182,7 @@ async function loadFromCloud(userId: string): Promise<StoreState | null> {
 
 async function saveToCloud(userId: string, state: StoreState) {
   try {
-    await (supabase.from("app_config") as any).upsert({
+    await db("app_config").upsert({
       user_id: userId,
       agents: state.agents,
       api_key: state.apiKey,
@@ -262,20 +263,21 @@ export function useAgentStore(userId: string | null) {
     try {
       const parsed = JSON.parse(json);
       if (parsed.agents && Array.isArray(parsed.agents)) {
-        setState({
+        // Functional update so we read the latest state without depending on it.
+        setState((s) => ({
           agents: parsed.agents.map((a: AgentConfig, i: number) => ({
             ...a,
             speakOrder: a.speakOrder ?? i + 1,
           })),
-          apiKey: parsed.apiKey || state.apiKey,
-          anthropicKey: parsed.anthropicKey || state.anthropicKey,
-          useMcpBackend: parsed.useMcpBackend ?? state.useMcpBackend,
-        });
+          apiKey: parsed.apiKey || s.apiKey,
+          anthropicKey: parsed.anthropicKey || s.anthropicKey,
+          useMcpBackend: parsed.useMcpBackend ?? s.useMcpBackend,
+        }));
         return true;
       }
-    } catch {}
+    } catch { /* invalid JSON — report failure to caller */ }
     return false;
-  }, [state.apiKey]);
+  }, []);
 
   const sortedAgents = [...state.agents].sort((a, b) => a.speakOrder - b.speakOrder);
 

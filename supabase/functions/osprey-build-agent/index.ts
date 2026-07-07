@@ -171,7 +171,7 @@ Deno.serve(async (req) => {
 
     const buildId = buildRow.id;
 
-    // @ts-ignore
+    // @ts-expect-error EdgeRuntime is provided by the Supabase edge runtime
     EdgeRuntime.waitUntil(
       generateAgent(buildId, name.trim(), description.trim()).catch((err) =>
         console.error("osprey-build-agent error:", err)
