@@ -5,6 +5,7 @@ import AgentPanel, { AgentPanelHandle } from "@/components/AgentPanel";
 import SettingsPanel from "@/components/SettingsPanel";
 import CommsFeed from "@/components/CommsFeed";
 import { useAgentStore } from "@/hooks/useAgentStore";
+import { useVoice } from "@/hooks/useVoiceSettings";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { resetSession, clearBackendModeCache } from "@/lib/agent-api";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,7 +19,10 @@ export default function Index({ userId }: IndexProps) {
   const [meetingActive, setMeetingActive] = useState(false);
   const [askAllText, setAskAllText] = useState("");
   const [isBroadcasting, setIsBroadcasting] = useState(false);
-  const [silentMode, setSilentMode] = useState(false);
+  // Voice on/off now lives in the persistent global setting so it survives reloads
+  // and stays in sync with the nav toggle. silentMode is just its inverse.
+  const { enabled: voiceEnabled, setEnabled: setVoiceEnabled } = useVoice();
+  const silentMode = !voiceEnabled;
   const [meetingParticipants, setMeetingParticipants] = useState<Set<string>>(
     () => new Set(store.agents.map((a) => a.id))
   );
@@ -297,7 +301,7 @@ export default function Index({ userId }: IndexProps) {
             )}
             {meetingActive && (
               <button
-                onClick={() => setSilentMode(!silentMode)}
+                onClick={() => setVoiceEnabled(silentMode)}
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono transition-colors"
                 style={{
                   backgroundColor: silentMode ? "hsl(var(--primary) / 0.15)" : "transparent",

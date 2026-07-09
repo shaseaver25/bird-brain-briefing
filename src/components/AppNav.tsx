@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Volume2, VolumeX } from "lucide-react";
 import { DEFAULT_AGENTS } from "@/hooks/useAgentStore";
+import { useVoice } from "@/hooks/useVoiceSettings";
 
 const LINKS = [
   { to: "/", label: "Meeting Room" },
@@ -12,6 +13,7 @@ const LINKS = [
 export default function AppNav() {
   const location = useLocation();
   const [dashOpen, setDashOpen] = useState(false);
+  const { enabled: voiceEnabled, toggleEnabled } = useVoice();
 
   // Public visitor pages stand alone — no internal nav for visitors.
   if (location.pathname === "/meet") return null;
@@ -64,6 +66,18 @@ export default function AppNav() {
             </div>
           )}
         </div>
+
+        {/* Global voice on/off — persists across reloads and every page. */}
+        <button
+          onClick={toggleEnabled}
+          title={voiceEnabled ? "Agent voices ON — click to mute" : "Agent voices OFF — click to enable"}
+          className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-md font-mono text-xs whitespace-nowrap transition-colors ${
+            voiceEnabled ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {voiceEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+          {voiceEnabled ? "Voice On" : "Voice Off"}
+        </button>
       </div>
     </nav>
   );

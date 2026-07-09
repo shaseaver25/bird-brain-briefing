@@ -1,12 +1,13 @@
 import { useState, useCallback, useRef, useImperativeHandle, forwardRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Volume2, Send, Paperclip, X, Trash2 } from "lucide-react";
+import { Volume2, VolumeX, Send, Paperclip, X, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { textToSpeech } from "@/lib/elevenlabs";
 import { sendAgentMessage, getSessionId } from "@/lib/agent-api";
 import { supabase } from "@/integrations/supabase/client";
 import { db } from "@/lib/untyped-db";
 import { AgentConfig } from "@/hooks/useAgentStore";
+import { useVoice } from "@/hooks/useVoiceSettings";
 
 interface AgentRow { id: string }
 interface ConversationRow { role: string; content: string; created_at?: string }
@@ -58,6 +59,8 @@ export interface AgentPanelHandle {
 }
 
 const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isActive, apiKey, anthropicKey, silentMode, inMeeting, onToggleMeeting }, ref) => {
+  const { enabled: voiceEnabled, isMuted, toggleMuted } = useVoice();
+  const muted = isMuted(agent.id);
   const navigate = useNavigate();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isThinking, setIsThinking] = useState(false);
@@ -205,7 +208,8 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
   }, []);
 
   const speak = useCallback(async (text: string): Promise<void> => {
-    if (silentMode) return;
+    // Respect global voice off, the meeting-room silent toggle, and this agent's own mute.
+    if (silentMode || !voiceEnabled || muted) return;
     abortSpeakRef.current = false;
     setIsSpeaking(true);
     try {
@@ -236,7 +240,7 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
     } finally {
       setIsSpeaking(false);
     }
-  }, [agent, apiKey, silentMode]);
+  }, [agent, apiKey, silentMode, voiceEnabled, muted]);
 
   useImperativeHandle(ref, () => ({ sendMessage, sendMeetingMessage, speak, stopSpeaking }), [sendMessage, sendMeetingMessage, speak, stopSpeaking]);
 
@@ -330,6 +334,14 @@ const AgentPanel = forwardRef<AgentPanelHandle, AgentPanelProps>(({ agent, isAct
             {isSpeaking && (
               <Volume2 className="h-4 w-4 animate-pulse" style={{ color: accent }} />
             )}
+            <button
+              onClick={() => toggleMuted(agent.id)}
+              className={`p-1 rounded hover:bg-muted transition-colors ${muted ? "text-destructive" : "text-muted-foreground hover:text-foreground"}`}
+              title={muted ? `${agent.name} voice muted — click to unmute` : `Mute ${agent.name}'s voice`}
+              aria-label={muted ? `Unmute ${agent.name}` : `Mute ${agent.name}`}
+            >
+              {muted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+            </button>
             <button
               onClick={clearHistory}
               className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-destructive"

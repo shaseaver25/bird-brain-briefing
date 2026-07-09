@@ -10,6 +10,7 @@ import Index from "./pages/Index";
 import AuthPage from "./pages/AuthPage";
 import GlobalVoiceStop from "./components/GlobalVoiceStop";
 import AppNav from "./components/AppNav";
+import { VoiceProvider } from "./hooks/useVoiceSettings";
 
 // Secondary routes are lazy so their (sometimes heavy) dependencies don't load
 // on first paint. In particular /my-agent pulls in the ElevenLabs voice stack
@@ -72,6 +73,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <VoiceProvider>
       <BrowserRouter>
         <AppNav />
         <Suspense fallback={<RouteFallback />}>
@@ -85,6 +87,7 @@ const App = () => (
         </Suspense>
         <GlobalVoiceStop />
       </BrowserRouter>
+      </VoiceProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
