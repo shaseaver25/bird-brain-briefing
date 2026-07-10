@@ -51,12 +51,15 @@ STRICT RULES:
    "durationMin": 15 | 30 | 60 (include once the reason is known),
    "reason": "one-line meeting purpose (include once known)",
    "preference": "visitor's timing preference in a few words, or null",
+   "fromDate": "YYYY-MM-DD earliest date to search, or null",
+   "toDate": "YYYY-MM-DD latest date to search, or null",
    "chosenStart": "ISO start time (only with action book)",
    "name": "visitor name (only with action book)",
    "email": "visitor email (only with action book)"}
 - action "chat": you still need information (reason, length, preference, name, or email).
 - action "propose": reason and durationMin are known and you want to show open times. Do NOT list times in your reply — the system fetches real availability and shows it; your reply should just lead into it (e.g. "Here's what Shannon has open...").
 - action "book": the visitor accepted a specific offered time AND you have name + email. chosenStart must be exactly one of the offered slot start times.
+- TIMEFRAME: When the visitor names a specific timeframe — a month ("August"), a week ("the week of the 14th"), or a bound ("after the 20th", "sometime in the fall") — resolve it to real calendar dates using today's date (given below) and set fromDate and toDate. For a whole month, use the 1st through the last day of that month. If the named month/date is earlier than today, use next year's occurrence. If they give no timeframe, set both to null and the system shows the soonest openings. Always keep proposing — NEVER tell the visitor a month or date is unavailable without first emitting action "propose" for that range and letting the system fetch it.
 - NEVER invent, guess, or state specific dates/times yourself — only reference times the system has actually offered in this conversation.
 - If a booking attempt failed earlier in the conversation, do NOT refuse subsequent attempts yourself — always emit action "book" for a time the system offered and let the system verify it. Only the system decides whether a slot is bookable.
 - Never promise anything on Shannon's behalf beyond the meeting itself. If asked things outside scheduling, answer in one friendly sentence and steer back to booking.
@@ -68,9 +71,22 @@ interface AgentDecision {
   durationMin?: number;
   reason?: string;
   preference?: string | null;
+  fromDate?: string | null;
+  toDate?: string | null;
   chosenStart?: string;
   name?: string;
   email?: string;
+}
+
+// Only forward well-formed YYYY-MM-DD values to the availability search.
+function ymd(v: unknown): string | undefined {
+  return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined;
+}
+
+// Local (TZ) calendar date of an ISO instant, as YYYY-MM-DD.
+function ymdLocal(iso: string): string {
+  const lp = localParts(new Date(iso));
+  return `${lp.year}-${String(lp.month).padStart(2, "0")}-${String(lp.day).padStart(2, "0")}`;
 }
 
 function extractJson(text: string): AgentDecision | null {
@@ -176,10 +192,14 @@ Deno.serve(async (req) => {
 
     // ── Propose: fetch real availability and let Swift pick suitable times ──
     if (decision.action === "propose" && durationMin) {
-      const open = await getOpenSlots(durationMin);
+      const window = { fromDate: ymd(decision.fromDate), toDate: ymd(decision.toDate) };
+      const open = await getOpenSlots(durationMin, window);
       if (open.length === 0) {
+        const ranged = window.fromDate || window.toDate;
         return json({
-          reply: "Shannon's calendar is fully booked for the next two weeks. Leave your email on the contact form and she'll reach out directly.",
+          reply: ranged
+            ? "Shannon doesn't have any openings in that window. Want me to check a different date range?"
+            : "Shannon's calendar is fully booked for the next two weeks. Want me to look further out, or leave your email on the contact form and she'll reach out directly?",
           action: "chat",
         });
       }
@@ -200,8 +220,10 @@ Deno.serve(async (req) => {
         return json({ reply: decision.reply || "I still need a couple details before I can book that.", action: "chat" });
       }
       // Re-verify the chosen time is genuinely open (also guards against
-      // the model inventing a time that was never offered).
-      const open = await getOpenSlots(durationMin);
+      // the model inventing a time that was never offered). Search the chosen
+      // day specifically so this works even for far-out bookings.
+      const chosenDay = ymdLocal(chosenStart);
+      const open = await getOpenSlots(durationMin, { fromDate: chosenDay, toDate: chosenDay });
       const valid = open.some((s) => s.start === new Date(chosenStart).toISOString());
       if (!valid) {
         const offered = pickSpreadSlots(open, decision.preference, 4);
@@ -248,7 +270,7 @@ Deno.serve(async (req) => {
         // Surface the real failure in logs so it's diagnosable, and give the
         // visitor fresh clickable options instead of a dead-end message.
         console.error(`booking-agent create failed (${createRes.status}):`, JSON.stringify(created));
-        const stillOpen = await getOpenSlots(durationMin);
+        const stillOpen = await getOpenSlots(durationMin, { fromDate: ymd(decision.fromDate), toDate: ymd(decision.toDate) });
         const offered = pickSpreadSlots(stillOpen, decision.preference, 4);
         return json({
           reply: "I hit a snag booking that time. Here are the current open times — pick one and I'll try again.",

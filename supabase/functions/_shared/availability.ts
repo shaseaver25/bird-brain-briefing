@@ -7,6 +7,10 @@ export const TZ = "America/Chicago";
 export const BUFFER_MIN = 15;
 export const LEAD_HOURS = 24;
 export const DAYS_AHEAD = 14;
+// Hard ceiling on how far out we'll search when a visitor names a specific
+// timeframe (e.g. "sometime in the fall"). Bounds the freeBusy query + slot
+// generation while still letting bookings land a few months ahead.
+export const MAX_HORIZON_DAYS = 120;
 export const WORK_START_HOUR = 9; // local
 export const WORK_END_HOUR = 17;
 export const ALLOWED_DURATIONS = [15, 30, 45, 60] as const;
@@ -66,15 +70,47 @@ export function localParts(d: Date) {
   };
 }
 
-export async function getOpenSlots(durationMin: number): Promise<Slot[]> {
+function parseYmd(s?: string): { y: number; m: number; d: number } | null {
+  const m = typeof s === "string" ? s.match(/^(\d{4})-(\d{2})-(\d{2})$/) : null;
+  if (!m) return null;
+  return { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) };
+}
+
+/**
+ * Open slots of `durationMin`, filtered against real free/busy across every
+ * subscribed calendar.
+ *
+ * By default it searches the next DAYS_AHEAD days (the standard booking page).
+ * Pass `{ fromDate, toDate }` (local YYYY-MM-DD) to search a specific window —
+ * this is how Swift honors "later in August" instead of always returning the
+ * soonest openings. The window is clamped to [now, now + MAX_HORIZON_DAYS].
+ */
+export async function getOpenSlots(
+  durationMin: number,
+  opts: { fromDate?: string; toDate?: string } = {},
+): Promise<Slot[]> {
   if (!(ALLOWED_DURATIONS as readonly number[]).includes(durationMin)) {
     throw new Error(`duration must be one of ${ALLOWED_DURATIONS.join(", ")}`);
   }
   const accessToken = await getGoogleAccessToken();
 
+  const dayMs = 24 * 3600 * 1000;
   const now = new Date();
   const earliest = new Date(now.getTime() + LEAD_HOURS * 3600 * 1000);
-  const horizon = new Date(now.getTime() + DAYS_AHEAD * 24 * 3600 * 1000);
+  const maxEnd = new Date(now.getTime() + MAX_HORIZON_DAYS * dayMs);
+
+  // Resolve the search window from the optional local date range.
+  const from = parseYmd(opts.fromDate);
+  const to = parseYmd(opts.toDate);
+  let windowStart = from ? localToUtc(from.y, from.m, from.d, 0, 0) : new Date(now.getTime());
+  if (windowStart.getTime() < now.getTime()) windowStart = new Date(now.getTime());
+  let windowEnd = to
+    ? localToUtc(to.y, to.m, to.d, 23, 59)
+    : new Date(windowStart.getTime() + DAYS_AHEAD * dayMs);
+  if (windowEnd.getTime() > maxEnd.getTime()) windowEnd = maxEnd;
+  if (windowEnd.getTime() <= windowStart.getTime()) {
+    windowEnd = new Date(windowStart.getTime() + DAYS_AHEAD * dayMs);
+  }
 
   // Honor conflicts across every subscribed calendar — not just "primary".
   const calListRes = await fetch(
@@ -92,8 +128,8 @@ export async function getOpenSlots(durationMin: number): Promise<Slot[]> {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      timeMin: now.toISOString(),
-      timeMax: horizon.toISOString(),
+      timeMin: windowStart.toISOString(),
+      timeMax: windowEnd.toISOString(),
       timeZone: TZ,
       items: calendarIds.map((id) => ({ id })),
     }),
@@ -107,14 +143,19 @@ export async function getOpenSlots(durationMin: number): Promise<Slot[]> {
   }
   const busyRanges = busy.map(b => ({ start: new Date(b.start).getTime(), end: new Date(b.end).getTime() }));
 
-  // Walk each weekday in TZ, generate candidate slots on a 30-min grid,
+  // Walk each weekday in the window, generate candidate slots on a 30-min grid,
   // filter against busy + buffer.
   const slotMs = durationMin * 60 * 1000;
   const bufMs = BUFFER_MIN * 60 * 1000;
   const slots: Slot[] = [];
+  const spanDays = Math.min(
+    MAX_HORIZON_DAYS,
+    Math.floor((windowEnd.getTime() - windowStart.getTime()) / dayMs) + 1,
+  );
 
-  for (let i = 0; i < DAYS_AHEAD; i++) {
-    const probe = new Date(now.getTime() + i * 24 * 3600 * 1000);
+  for (let i = 0; i <= spanDays; i++) {
+    const probe = new Date(windowStart.getTime() + i * dayMs);
+    if (probe.getTime() > windowEnd.getTime()) break;
     const lp = localParts(probe);
     if (lp.weekday === "Sat" || lp.weekday === "Sun") continue;
 
@@ -124,6 +165,7 @@ export async function getOpenSlots(durationMin: number): Promise<Slot[]> {
         const endUtc = new Date(startUtc.getTime() + slotMs);
 
         if (startUtc < earliest) continue;
+        if (startUtc.getTime() < windowStart.getTime() || startUtc.getTime() > windowEnd.getTime()) continue;
         // Slot must end by work end, same local day
         const endLp = localParts(endUtc);
         if (endLp.day !== lp.day || endLp.hour > WORK_END_HOUR || (endLp.hour === WORK_END_HOUR && endLp.minute > 0)) continue;
