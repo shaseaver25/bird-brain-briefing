@@ -29,7 +29,7 @@ Three code/infra surfaces are in play. Confusing them is the #1 way to break thi
 
 ## Agents: identity, chat, and the 404 trap
 
-- **DB is canonical.** `public.agents` (has a `slug` column) + `public.agent_profiles` (system prompt, model, max_tokens, `is_active`). `supabase/seed_agents.sql` is stale — never trust it.
+- **DB is canonical.** `public.agents` (has a `slug` column) + `public.agent_profiles` (system prompt, model, max_tokens, `is_active`). There is no seed file — read the live DB.
 - **Three different name spaces** for the same agent — do not guess, map:
 
   | UI id (`useAgentStore`) | DB slug | Display name |
@@ -42,7 +42,7 @@ Three code/infra surfaces are in play. Confusing them is the #1 way to break thi
   | `mockingjay` | `mockingjay` | MockingJay |
   | `magpie` | `magpie` | Magpie |
 
-- **An agent chats only if it has BOTH an `agents` row and an active `agent_profiles` row.** Missing profile = the UI shows "Connection error. Please try again." (this bit Owl; Magpie may still lack a profile — check before debugging anything else).
+- **An agent chats only if it has BOTH an `agents` row and an active `agent_profiles` row.** Missing profile = the UI shows "Connection error. Please try again." — check this FIRST when one agent errors. **Rule: any agent added to the roster must get an active profile at the same time.** (As of July 2026 all 9 agents have one.)
 - **Chat backends** (`src/lib/agent-api.ts`): default is the `agent-chat` edge function (server-side keys). A Settings toggle ("Claude API (MCP)", persisted in localStorage + `app_config.use_mcp_backend`) switches to direct-from-browser Anthropic calls — this is a known footgun that has taken down all chat; both paths must keep their edge-function fallback. If every agent errors at once, check `app_config.use_mcp_backend` first.
 - **Meeting mode:** agents reply literally `---` to pass when not addressed. That is designed behavior, not a failure.
 - **Memory (anti-hallucination):** `agent-chat` injects `shared_context` (team-wide facts, keyed by `context_key`) and `agent_memory` (`memory_type` ∈ fact/preference/learned/instruction; `learned` = lessons auto-captured when Shannon corrects an agent) into the system prompt, plus GROUNDING_RULES. When agents hallucinate, the fix is usually seeding/correcting memory rows — not prompt surgery.
@@ -83,7 +83,8 @@ Edge function secrets live in Lovable Cloud (not in the repo): `ANTHROPIC_API_KE
 Work is not done when it compiles. In order:
 
 1. `npx tsc --noEmit -p tsconfig.app.json` → **0 errors**. (`main` is currently clean; if you hit errors in files you didn't touch, diff against `origin/main` — pre-existing breakage is not yours to silently absorb, but flag it and offer the fix.)
-2. `npm run lint` → clean (the repo was brought to 0/0 deliberately; don't regress it). `npm test` runs vitest if tests are relevant.
+2. `npm run lint` → clean (the repo was brought to 0/0 deliberately; don't regress it).
+2a. **Testing bar:** tsc + lint are the merge bar for UI and edge functions (those get verified live instead — see #3). Pure logic in `src/lib/` (parsers like `extractJson`, scoring, date/money math) DOES need a vitest test when added or changed — `npm test` must pass. Don't write component tests unless asked.
 3. For edge functions: no Deno locally — sanity-check structure (brace balance, imports) and rely on Lovable's deploy; then **verify against the live system**: query the actual tables (`widget_data`, `conversations`, `mockingjay_posts`…) through the Lovable MCP and confirm the run produced real rows. A 200 response with empty output is a failure that must be surfaced, not success.
 4. For frontend: remember nothing is user-visible until Shannon Publishes. Say so explicitly when reporting done.
 5. Report honestly: what was verified live vs. what was only typechecked.
@@ -91,8 +92,8 @@ Work is not done when it compiles. In order:
 ## Git & deployment rules
 
 - **HARD RULE: never commit or push without Shannon saying so in that turn.** "commit this" / "push" / "run" (after showing the command) is sufficient authorization — then just do it, no double-confirming.
-- Commit only the files belonging to the current task — this working tree carries long-lived untracked files (`supabase/functions/invoke-agent/`, `supabase/migrations/20260417_mcp_memory_layer.sql`, `supabase/seed_agents.sql`, `supabase/.temp/`) and sometimes a stash; leave them alone unless asked.
-- Use npm/npx for local commands (both `bun.lockb` and `package-lock.json` exist; npm is what's actually used locally).
+- Commit only the files belonging to the current task. (Old untracked leftovers were archived to `~/bird-brain-briefing-archive/` in July 2026; `supabase/.temp/` is gitignored. A stash may exist — leave it unless asked.)
+- **Two lockfiles, both real:** `bun.lock` belongs to Lovable's build (Lovable commits to it — never delete or hand-edit it); `package-lock.json` is for local npm. Use npm/npx for all local commands. The legacy `bun.lockb` was removed — don't resurrect it.
 - Production Publish (Lovable) and anything outward-facing: Shannon's action or explicit request only.
 
 ## Working style (project-specific reinforcement)
