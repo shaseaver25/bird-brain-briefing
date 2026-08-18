@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Authenticated users can read published dashboards" ON public.dashboard_configs;
